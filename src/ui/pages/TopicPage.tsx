@@ -1,6 +1,7 @@
 import { fmt } from '../../core/format';
 import type { SkillDef, TopicId } from '../../core/types';
 import { STUFEN } from '../../core/types';
+import { topicDocTitle } from '../../seo/meta';
 import { masteryOf, starsOf, suggestedStufe, visibleSkills } from '../../state/selectors';
 import type { ProgressState } from '../../state/types';
 import { useProgress } from '../../state/useProgress';
@@ -74,7 +75,7 @@ export default function TopicPage({ topicId }: { topicId: TopicId }) {
           <TopicIcon topicId={topicId} />
         </span>
         <div>
-          <PageTitle docTitle={meta.title}>{meta.title}</PageTitle>
+          <PageTitle docTitle={topicDocTitle(meta)}>{meta.title}</PageTitle>
           <p className="lead">{meta.description}</p>
         </div>
       </div>

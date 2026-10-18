@@ -18,8 +18,15 @@ export interface AppLocation {
   key: number;
 }
 
+let serverPath = '/';
+
+/** Build-time prerendering only: the path to render where there is no window (src/seo/prerender.tsx). */
+export function setServerPath(path: string): void {
+  serverPath = path;
+}
+
 function readPath(): string {
-  if (typeof window === 'undefined') return '/';
+  if (typeof window === 'undefined') return serverPath;
   const p = window.location.pathname || '/';
   return p.length > 1 && p.endsWith('/') ? p.replace(/\/+$/, '') || '/' : p;
 }

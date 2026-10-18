@@ -1,9 +1,11 @@
 // Fails the build if the production bundle references any third-party origin
-// (DSGVO: no external fonts, CDNs, analytics or embeds) or contains inline scripts.
+// (DSGVO: no external fonts, CDNs, analytics or embeds) or contains inline scripts or inline style
+// attributes (both blocked by the CSP; JSON-LD data blocks are not scripts and are allowed).
+// Also checks that the prerendered pages, 404.html, the app shell, sitemap.xml and robots.txt exist.
 // Also checks the performance budget from docs/research.md (P15): initial JS ≤ 150 KiB gzip (enforced);
 // each lazily loaded topic chunk should stay ≤ 30 KiB gzip (target, reported as a warning) and must stay
 // ≤ 40 KiB gzip (hard limit, fails the build) so that content growth stays visible.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
@@ -21,7 +23,7 @@ const files = [];
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p);
-    else if (/\.(html|js|css|svg|json|webmanifest)$/.test(name)) files.push(p);
+    else if (/\.(html|js|css|svg|json|webmanifest|xml|txt)$/.test(name)) files.push(p);
   }
 })('dist');
 
@@ -31,9 +33,20 @@ for (const f of files) {
   for (const b of BANNED) {
     if (text.includes(b)) { console.error(`✗ ${f} references banned host "${b}"`); failed = true; }
   }
-  if (f.endsWith('.html') && /<script(?![^>]*\bsrc=)[^>]*>/i.test(text)) {
+  if (f.endsWith('.html') && /<script(?![^>]*\b(?:src=|type="application\/ld\+json"))[^>]*>/i.test(text)) {
     console.error(`✗ ${f} contains an inline <script> (blocked by CSP)`); failed = true;
   }
+  if (f.endsWith('.html') && /<[a-z][^>]*\sstyle=/i.test(text)) {
+    console.error(`✗ ${f} contains an inline style attribute (blocked by CSP)`); failed = true;
+  }
+}
+
+// ─── Prerendered files (scripts/prerender.mjs) ───────────────────────────────
+for (const f of ['404.html', 'app.html', 'sitemap.xml', 'robots.txt', 'thema/zahlen.html']) {
+  if (!existsSync(join('dist', f))) { console.error(`✗ dist/${f} is missing (prerender did not run?)`); failed = true; }
+}
+if (!/<div id="root" data-route="\/">/.test(readFileSync('dist/index.html', 'utf8'))) {
+  console.error('✗ dist/index.html is not prerendered'); failed = true;
 }
 
 // ─── Performance budget ──────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { randomSeed } from '../../core/rng';
 import type { Exercise, GenContext, SkillDef, Stufe, TopicId } from '../../core/types';
 import { STUFEN } from '../../core/types';
 import { KMK_TAGS } from '../../data/curriculum';
+import { DOC_TITLES } from '../../seo/meta';
 import { visibleSkills } from '../../state/selectors';
 import { useSettings } from '../../state/useProgress';
 import { TOPICS, getTopicMeta } from '../../topics/registry';
@@ -171,13 +172,16 @@ function Sheet({ spec, skills, ctx }: { spec: SheetSpec; skills: SkillDef[]; ctx
 
 export default function WorksheetPage() {
   const settings = useSettings();
-  const [topicId, setTopicId] = useState<TopicId>('zahlen');
+  // The first topic is preselected (and preloaded before hydration, see preloadRoute in App.tsx).
+  const [topicId, setTopicId] = useState<TopicId>(TOPICS[0].id);
   const [picked, setPicked] = useState<Partial<Record<TopicId, string[]>>>({});
   const [stufe, setStufe] = useState<Stufe>(2);
   const [count, setCount] = useState<TaskCount>(10);
   const [partner, setPartner] = useState(false);
   const [answerKey, setAnswerKey] = useState(true);
-  const [seedText, setSeedText] = useState(() => String(randomSeed()));
+  // Empty in the prerendered HTML (the same for every build); the random start number is picked in the browser.
+  const [seedText, setSeedText] = useState('');
+  useEffect(() => setSeedText((s) => s || String(randomSeed())), []);
   const [error, setError] = useState<string | null>(null);
   const [spec, setSpec] = useState<SheetSpec | null>(null);
 
@@ -228,7 +232,7 @@ export default function WorksheetPage() {
   return (
     <div className="page worksheet-page">
       <div className="ws-intro no-print">
-        <PageTitle docTitle="Arbeitsblätter">Arbeitsblätter</PageTitle>
+        <PageTitle docTitle={DOC_TITLES.worksheet}>Arbeitsblätter</PageTitle>
         <p className="lead">
           Für Lehrkräfte und Eltern: Stellen Sie ein Blatt zum Ausdrucken zusammen. Dieselbe Blatt-Nummer ergibt mit denselben Einstellungen immer dieselben Aufgaben.
         </p>

@@ -24,6 +24,7 @@ const LOADERS: Record<TopicId, () => Promise<{ default: TopicModule }>> = {
 };
 
 const cache = new Map<TopicId, Promise<TopicModule>>();
+const loaded = new Map<TopicId, TopicModule>();
 
 export function isTopicId(id: string): id is TopicId {
   return Object.prototype.hasOwnProperty.call(LOADERS, id);
@@ -38,11 +39,19 @@ export function getTopicMeta(id: TopicId): TopicMeta {
 export function loadTopic(id: TopicId): Promise<TopicModule> {
   let p = cache.get(id);
   if (!p) {
-    p = LOADERS[id]().then((m) => m.default);
+    p = LOADERS[id]().then((m) => {
+      loaded.set(id, m.default);
+      return m.default;
+    });
     p.catch(() => cache.delete(id));
     cache.set(id, p);
   }
   return p;
+}
+
+/** The module if loadTopic() has already delivered it, else undefined (no loading starts). */
+export function loadedTopic(id: TopicId): TopicModule | undefined {
+  return loaded.get(id);
 }
 
 export function loadAllTopics(): Promise<TopicModule[]> {

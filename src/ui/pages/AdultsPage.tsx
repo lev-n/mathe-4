@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import type { TopicId } from '../../core/types';
 import { TOPIC_ALIGNMENT } from '../../data/curriculum';
+import { DOC_TITLES } from '../../seo/meta';
 import { badgeById } from '../../state/badges';
 import { today } from '../../state/dates';
 import { IMPORT_MESSAGES, MAX_IMPORT_CHARS, parseText } from '../../state/schema';
@@ -610,7 +611,7 @@ function CurriculumSection() {
 export default function AdultsPage() {
   return (
     <div className="page adults-page">
-      <PageTitle docTitle="Für Eltern und Lehrkräfte">Für Eltern und Lehrkräfte</PageTitle>
+      <PageTitle docTitle={DOC_TITLES.adults}>Für Eltern und Lehrkräfte</PageTitle>
       <p className="lead">
         Mathe 4 ist ein kostenloses Übungsportal für die 4. Klasse. Es braucht keine Anmeldung, zeigt keine Werbung und
         schickt keine Daten an Dritte.
