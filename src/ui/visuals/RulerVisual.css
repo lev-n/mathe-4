@@ -1,0 +1,35 @@
+/* Lineal. Colours only from tokens.css. */
+.visual-ruler .rl-bar {
+  fill: var(--fill-1);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.visual-ruler .rl-guide {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.visual-ruler .rl-body {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.visual-ruler .rl-tick {
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.visual-ruler .rl-tick--cm { stroke-width: 2; }
+.visual-ruler .rl-num {
+  font-size: 17px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-ruler .rl-unit {
+  font-size: 16px;
+  fill: var(--text-muted);
+}
+
+.visual-ruler.visual--print .rl-bar { fill: var(--surface-2); }
+@media print {
+  .visual-ruler .rl-bar { fill: var(--surface-2); }
+}

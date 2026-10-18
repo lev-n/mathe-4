@@ -1,0 +1,45 @@
+/* Säckchen mit Kugeln. Colours only from tokens.css; every colour group is labelled with its word. */
+.visual-bag .bg-body,
+.visual-bag .bg-neck {
+  fill: var(--surface-2);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.visual-bag .bg-tie {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.visual-bag .bg-ball {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.visual-bag .bg-ball--rot { fill: var(--c-rot); }
+.visual-bag .bg-ball--blau { fill: var(--c-blau); }
+.visual-bag .bg-ball--gelb { fill: var(--c-gelb); }
+.visual-bag .bg-ball--gruen { fill: var(--c-gruen); }
+.visual-bag .bg-ball--lila { fill: var(--c-lila); }
+.visual-bag .bg-ball--orange { fill: var(--c-orange); }
+.visual-bag .bg-shine {
+  fill: var(--surface);
+  opacity: 0.55;
+}
+.visual-bag .bg-label {
+  font-size: 18px;
+  font-weight: 700;
+  fill: var(--text);
+}
+
+/* Print / worksheet: outlined balls on white; the colour words carry the information. */
+.visual-bag.visual--print .bg-body,
+.visual-bag.visual--print .bg-neck,
+.visual-bag.visual--print .bg-ball { fill: var(--surface); }
+.visual-bag.visual--print .bg-shine { display: none; }
+@media print {
+  .visual-bag .bg-body,
+  .visual-bag .bg-neck,
+  .visual-bag .bg-ball { fill: var(--surface); }
+  .visual-bag .bg-shine { display: none; }
+}

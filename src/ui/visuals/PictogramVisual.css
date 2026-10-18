@@ -1,0 +1,51 @@
+/* Bilddiagramm. Colours only from tokens.css; pictures always have a dark outline. */
+.visual-pictogram .pg-title {
+  font-size: 20px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-pictogram .pg-cat,
+.visual-pictogram .pg-legend-text {
+  font-size: 18px;
+  fill: var(--text);
+}
+.visual-pictogram .pg-legend-text { font-weight: 700; }
+.visual-pictogram .pg-row {
+  stroke: var(--border-subtle);
+  stroke-width: 1.5;
+}
+.visual-pictogram .pg-sep {
+  stroke: var(--grid-line);
+  stroke-width: 1.5;
+}
+.visual-pictogram .pg-legend-box {
+  fill: var(--surface-2);
+  stroke: var(--grid-line);
+  stroke-width: 1.5;
+}
+.visual-pictogram .pg-icon {
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.visual-pictogram .pg-icon--person { fill: var(--c-blau); }
+.visual-pictogram .pg-icon--stern { fill: var(--c-gelb); }
+.visual-pictogram .pg-icon--ball { fill: var(--surface); }
+.visual-pictogram .pg-icon--buch { fill: var(--c-gruen); }
+.visual-pictogram .pg-icon--apfel { fill: var(--c-rot); }
+.visual-pictogram .pg-icon--herz { fill: var(--c-rot); }
+.visual-pictogram .pg-icon .pg-detail { fill: var(--ink); }
+.visual-pictogram .pg-icon .pg-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+/* Print / worksheet: outlined pictures on white. */
+.visual-pictogram.visual--print .pg-icon { fill: var(--surface); }
+.visual-pictogram.visual--print .pg-legend-box { fill: var(--surface); }
+@media print {
+  .visual-pictogram .pg-icon { fill: var(--surface); }
+  .visual-pictogram .pg-legend-box { fill: var(--surface); }
+}

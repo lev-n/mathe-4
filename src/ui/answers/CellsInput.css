@@ -1,0 +1,152 @@
+/* Toggle grid for "Spiegelbild ergänzen". Cells ≥ 48 px; colours only from tokens.css. */
+.cells-input {
+  --cells-size: 52px;
+  --cells-gap: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cells-help {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 2-D content may scroll sideways on very narrow screens (WCAG 1.4.10 exception). */
+.cells-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--space-3);
+}
+
+.cells-grid {
+  position: relative;
+  display: inline-grid;
+  gap: var(--cells-gap);
+  padding: var(--cells-gap);
+  background: var(--grid-line);
+  border-radius: 4px;
+}
+
+.cells-cell {
+  position: relative;
+  width: var(--cells-size);
+  height: var(--cells-size);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--motion-ms);
+}
+.cells-cell:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; z-index: 2; }
+
+.cells-cell.is-on { background: var(--fill-1); }
+
+/* Hover tint only for real pointers: on touch screens the hover state sticks to the last tapped cell,
+   and a cell that was just switched off would still look half painted. */
+@media (hover: hover) and (pointer: fine) {
+  .cells-cell:hover:not([aria-disabled='true']) { background: var(--primary-soft); }
+  .cells-cell.is-on:hover:not([aria-disabled='true']) { background: var(--fill-1); }
+}
+
+/* Given cells: same blue, with stripes so they differ from the child's cells without relying on colour. */
+.cells-cell.is-given {
+  background: repeating-linear-gradient(45deg, var(--fill-1) 0 7px, var(--primary-soft) 7px 10px);
+  cursor: default;
+}
+
+.cells-cell[aria-disabled='true'] { cursor: default; }
+
+.cells-cell.is-solution {
+  background: var(--ok-soft);
+  box-shadow: inset 0 0 0 3px var(--ok);
+}
+.cells-cell.is-solution .cells-icon { color: var(--ok); }
+
+.cells-cell.is-extra {
+  background: repeating-linear-gradient(-45deg, var(--retry-soft) 0 6px, var(--fill-1) 6px 9px);
+  box-shadow: inset 0 0 0 3px var(--retry);
+}
+.cells-cell.is-missing {
+  background: var(--retry-soft);
+  box-shadow: inset 0 0 0 3px var(--retry);
+  outline: 2px dashed var(--retry);
+  outline-offset: -8px;
+}
+.cells-cell.is-extra .cells-icon,
+.cells-cell.is-missing .cells-icon { color: var(--retry); }
+
+.cells-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cells-axis {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+}
+.cells-axis--vertical {
+  top: -10px;
+  bottom: -10px;
+  width: 0;
+  margin-left: -2px;
+  border-left: 4px dashed var(--focus);
+}
+.cells-axis--horizontal {
+  left: -10px;
+  right: -10px;
+  height: 0;
+  margin-top: -2px;
+  border-top: 4px dashed var(--focus);
+}
+.cells-axis--diagonal {
+  inset: var(--cells-gap);
+  width: calc(100% - 2 * var(--cells-gap));
+  height: calc(100% - 2 * var(--cells-gap));
+  overflow: visible;
+}
+.cells-axis--diagonal line {
+  stroke: var(--focus);
+  stroke-width: 4;
+  stroke-dasharray: 10 7;
+  stroke-linecap: round;
+}
+
+.cells-summary {
+  margin: 0;
+  color: var(--retry);
+  font-weight: 650;
+  text-align: center;
+}
+
+.cells-print { display: flex; justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cells-cell { transition: none; }
+}
+
+@media print {
+  .cells-input .cells-help { display: none; }
+}
+
+/* Phones: 48 px cells (the minimum target size) and less padding, so a 6 × 6 grid fits without scrolling. */
+@media (max-width: 480px) {
+  .cells-input { --cells-size: 48px; }
+  .cells-scroll { padding: 1px; }
+  /* the axis must not stick out sideways here: that alone would make the grid scroll */
+  .cells-axis--horizontal { left: 0; right: 0; }
+}

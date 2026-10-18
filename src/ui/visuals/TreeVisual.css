@@ -1,0 +1,22 @@
+/* Baumdiagramm. Colours only from tokens.css. */
+.visual-tree .tr-edge {
+  stroke: var(--grid-line);
+  stroke-width: 2;
+}
+.visual-tree .tr-root { fill: var(--ink); }
+.visual-tree .tr-box {
+  fill: var(--topic-daten-bg);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.visual-tree .tr-text {
+  font-size: 17px;
+  fill: var(--text);
+}
+
+.visual-tree.visual--print .tr-box { fill: var(--surface); }
+.visual-tree.visual--print .tr-edge { stroke: var(--ink); stroke-width: 1.5; }
+@media print {
+  .visual-tree .tr-box { fill: var(--surface); }
+  .visual-tree .tr-edge { stroke: var(--ink); stroke-width: 1.5; }
+}

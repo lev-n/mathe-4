@@ -1,0 +1,216 @@
+/* Arbeitsblatt page: form on screen, A4 black/white friendly sheet in print. */
+
+.ws-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+.ws-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.ws-intro { display: flex; flex-direction: column; gap: var(--space-3); }
+.ws-seed { display: flex; flex-direction: column; gap: var(--space-2); }
+.ws-seed label { font-weight: 700; }
+.ws-seed__input { width: min(100%, 14ch); text-align: left; font-size: var(--fs-lead); }
+
+.ws-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-5);
+}
+.ws-actions .hint { margin: 0; }
+
+/* ── Sheet (screen) ────────────────────────────────── */
+.worksheet {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-6) var(--space-5);
+  color: var(--ink);
+}
+.worksheet__head {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.worksheet__head h2 { margin-bottom: var(--space-1); }
+.worksheet__head h2:focus { outline: none; }
+.worksheet__brand {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.worksheet__meta { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: var(--fs-small); max-width: none; }
+.worksheet__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  align-items: flex-end;
+}
+.worksheet__fields > span { display: inline-flex; align-items: flex-end; gap: var(--space-2); font-weight: 700; }
+.write-line {
+  display: inline-block;
+  width: 14rem;
+  max-width: 50vw;
+  border-bottom: 1.5px solid var(--ink);
+  height: 1.4em;
+}
+.write-line--short { width: 8rem; }
+
+.worksheet__tasks {
+  margin: 0;
+  padding-left: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.ws-task {
+  padding-left: var(--space-2);
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.ws-task::marker { font-weight: 800; }
+.ws-task__prompt { font-weight: 650; margin-bottom: var(--space-2); }
+.ws-task__context { margin-bottom: var(--space-2); }
+.ws-task__expr {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h2);
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-2) 0;
+  max-width: none;
+}
+.ws-task__answer { margin-top: var(--space-2); }
+.ws-task__partner {
+  margin-top: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+.worksheet__foot {
+  margin-top: var(--space-6);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+.worksheet__foot p { max-width: none; }
+.worksheet__kmk { font-size: 0.9rem; }
+
+/* ── Answer key ────────────────────────────────────── */
+.answer-key {
+  margin-top: var(--space-6);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-l);
+  padding: var(--space-5);
+  color: var(--ink);
+}
+.answer-key__info { color: var(--text-muted); font-size: var(--fs-small); max-width: none; }
+.answer-key__list { margin: 0; padding-left: 2rem; display: flex; flex-direction: column; gap: var(--space-3); }
+.key-item { break-inside: avoid; }
+.key-item__answer { font-weight: 750; display: block; }
+.key-item__step { display: block; color: var(--text-muted); font-size: var(--fs-small); }
+
+/* ── Print: A4, black/white, nothing but the sheet ─── */
+@page {
+  size: A4;
+  margin: 14mm 14mm 16mm;
+}
+
+@media print {
+  .ws-intro,
+  .ws-form,
+  .ws-actions { display: none !important; }
+  .worksheet-page { font-size: 12pt; }
+  .worksheet,
+  .answer-key {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    background: none;
+    color: var(--ink);
+  }
+  .worksheet__brand,
+  .worksheet__meta,
+  .worksheet__foot,
+  .ws-task__partner,
+  .answer-key__info,
+  .key-item__step { color: var(--ink); }
+  .worksheet__head { border-bottom-width: 1.5pt; }
+  .ws-task__expr { font-size: 16pt; }
+
+  /*
+   * Paper-saving layout: two columns; tasks with pictures, long texts or large answer areas span both
+   * (.ws-task--compact = isCompactTask). Row order is kept, so the numbering reads left → right, top → bottom.
+   */
+  .worksheet__tasks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7mm 12mm;
+    padding-left: 8mm;
+  }
+  .ws-task { grid-column: 1 / -1; min-width: 0; }
+  .ws-task--compact { grid-column: auto; }
+  .ws-task__prompt,
+  .ws-task__context { margin-bottom: 1.5mm; }
+  .ws-task__expr { margin: 1.5mm 0; }
+  .ws-task__answer { margin-top: 1.5mm; }
+
+  /* Small answers next to the picture (wraps below it when the picture is too wide). */
+  .ws-task__body--side {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 2mm 10mm;
+  }
+  .ws-task__body--side > .visual-wrap { margin: 0; min-width: 0; max-width: 100%; }
+  .ws-task__body--side > .ws-task__answer { margin-top: 0; }
+
+  /* Pictures at a printable size: at most 5.5 cm high (aspect ratio kept), option pictures smaller. */
+  .worksheet .visual-wrap { margin: 2mm 0; }
+  .worksheet .visual { max-height: 55mm; width: auto; }
+  /* Option pictures that carry text (charts, tables: .ans-choice--wide) keep their size, two per row. */
+  .worksheet .ans-choice:not(.ans-choice--wide) .ans-choice__visual .visual { max-height: 30mm; }
+
+  /* Tables: compact rows (no 48 px tap height on paper). */
+  .worksheet .table-visual { font-size: 11pt; }
+  .worksheet .table-visual caption { padding-bottom: 1mm; }
+  .worksheet .table-visual th,
+  .worksheet .table-visual td { height: auto; min-width: 0; padding: 1mm 3mm; }
+
+  /* Choices: several per row, no 64 px tap targets on paper. */
+  .worksheet .ans-choice { gap: 2mm 4mm; max-width: none; }
+  .worksheet .ans-choice--list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 80mm), 1fr)); }
+  .worksheet .ans-choice--grid:not(.ans-choice--wide) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 45mm), 1fr)); }
+  .worksheet .ans-choice--wide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .worksheet .ans-choice--wide .ans-choice__visual .visual { width: 100%; height: auto; max-height: none; }
+  .worksheet .ans-choice__option {
+    min-height: 0;
+    min-width: 0;
+    gap: 2mm;
+    padding: 1.5mm 3mm;
+    font-size: 11pt;
+    break-inside: avoid;
+  }
+  .worksheet .ans-choice--symbols .ans-choice__option { min-height: 0; padding: 1.5mm; font-size: 16pt; }
+  .worksheet .ans-choice__radio { width: 3.5mm; height: 3.5mm; border-width: 1pt; }
+  .worksheet__foot { font-size: 8.5pt; }
+  .worksheet__kmk { font-size: 8pt; }
+  .write-line { max-width: none; }
+  .answer-key {
+    break-before: page;
+    page-break-before: always;
+    margin-top: 0;
+  }
+}

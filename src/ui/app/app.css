@@ -1,0 +1,213 @@
+/* App shell: layout, header, navigation, footer and shared page primitives. Colours only from tokens.css. */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Skip link ─────────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-m);
+  font-weight: 700;
+  transform: translateY(-200%);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* ── Header ────────────────────────────────────────── */
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.site-header__inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding-right: var(--space-2);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: 0.01em;
+  /* Brand lettering: one typeface (the plain-zero digit font is for maths content). */
+  font-family: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+}
+.logo:hover { color: var(--text); }
+.logo-mark { width: 40px; height: 40px; flex: none; }
+.logo-mark__bg { fill: var(--primary); }
+.logo-mark__fg { stroke: var(--on-primary); }
+
+.site-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tap);
+}
+.site-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 650;
+  text-decoration: none;
+  text-align: center;
+  line-height: 1.2;
+}
+.site-nav a:hover { background: var(--surface-2); color: var(--text); }
+/* Current page: background + underline bar + bold (not colour alone) */
+.site-nav a[aria-current='page'] {
+  background: var(--primary-soft);
+  color: var(--primary-hover);
+  box-shadow: inset 0 -3px 0 var(--primary);
+  font-weight: 750;
+}
+
+@media (max-width: 44rem) {
+  .site-nav { width: 100%; }
+  .site-nav ul {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .site-nav a { padding: var(--space-2); }
+}
+
+.app--minimal .site-header__inner { padding-block: var(--space-1); }
+
+/* ── Main ──────────────────────────────────────────── */
+.site-main {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+}
+.site-main:focus { outline: none; }
+.page-title:focus,
+h1[tabindex='-1']:focus { outline: none; }
+
+/* ── Footer ────────────────────────────────────────── */
+.site-footer {
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
+}
+.site-footer__inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.site-footer__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+.site-footer__links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tap);
+}
+.site-footer__links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-s);
+  font-size: var(--fs-small);
+}
+.site-footer__links a[aria-current='page'] { font-weight: 750; }
+
+/* ── Shared primitives ─────────────────────────────── */
+/* Link-buttons keep their text colour on hover (base.css colours plain links on hover) */
+a.btn:hover { color: var(--text); }
+a.btn--primary:hover { color: var(--on-primary); }
+
+.loading {
+  color: var(--text-muted);
+  font-size: var(--fs-lead);
+  padding: var(--space-6) 0;
+}
+
+.icon { flex: none; }
+
+.stars {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+  line-height: 1;
+}
+.star { width: 1.15em; height: 1.15em; }
+.star--on path { fill: var(--c-gelb); stroke: var(--retry); }
+.star--off path { fill: none; stroke: var(--border); }
+
+.star-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+.star-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* Topic accents: soft colour, used for borders/icons, never as text colour on white */
+.topic--zahlen { --accent: var(--topic-zahlen); --accent-bg: var(--topic-zahlen-bg); }
+.topic--schriftlich { --accent: var(--topic-schriftlich); --accent-bg: var(--topic-schriftlich-bg); }
+.topic--kopfrechnen { --accent: var(--topic-kopfrechnen); --accent-bg: var(--topic-kopfrechnen-bg); }
+.topic--groessen { --accent: var(--topic-groessen); --accent-bg: var(--topic-groessen-bg); }
+.topic--geometrie { --accent: var(--topic-geometrie); --accent-bg: var(--topic-geometrie-bg); }
+.topic--daten { --accent: var(--topic-daten); --accent-bg: var(--topic-daten-bg); }
+.topic--sachaufgaben { --accent: var(--topic-sachaufgaben); --accent-bg: var(--topic-sachaufgaben-bg); }
+
+/* ── Print ─────────────────────────────────────────── */
+@media print {
+  .skip-link,
+  .site-header,
+  .site-footer { display: none !important; }
+  .app { min-height: 0; display: block; }
+  .site-main { max-width: none; padding: 0; }
+  .star--on path { fill: var(--ink); stroke: var(--ink); }
+  .star--off path { stroke: var(--ink); }
+}

@@ -1,0 +1,39 @@
+/* Säulen- und Balkendiagramm. Colours only from tokens.css. */
+.visual-barchart .bc-title {
+  font-size: 20px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-barchart .bc-unit {
+  font-size: 17px;
+  fill: var(--text-muted);
+}
+.visual-barchart .bc-tick,
+.visual-barchart .bc-cat {
+  font-size: 18px;
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.visual-barchart .bc-grid {
+  /* ≥ 3:1 against the surface: grid lines are needed to read the values. */
+  stroke: var(--grid-line);
+  stroke-width: 1;
+}
+.visual-barchart .bc-axis {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.visual-barchart .bc-bar {
+  fill: var(--fill-1);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+/* Print / worksheet: black and white friendly. */
+.visual-barchart.visual--print .bc-bar {
+  fill: var(--fill-hidden);
+}
+@media print {
+  .visual-barchart .bc-bar { fill: var(--fill-hidden); }
+}

@@ -1,0 +1,50 @@
+/* Münzen und Scheine. Colours only from tokens.css; every piece is labelled with its value. */
+.visual-money .mn-coin {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.visual-money .mn-coin--copper { fill: var(--fill-2); }
+.visual-money .mn-coin--gold { fill: var(--c-gelb); }
+.visual-money .mn-coin--euro { fill: var(--surface-2); }
+.visual-money .mn-coin-ring {
+  fill: none;
+  stroke: var(--c-gelb);
+  stroke-width: 4;
+}
+.visual-money .mn-note {
+  stroke: var(--ink);
+  stroke-width: 2;
+  fill: var(--surface-2);
+}
+.visual-money .mn-note--10 { fill: var(--fill-2); }
+.visual-money .mn-note--20 { fill: var(--fill-1); }
+.visual-money .mn-note--50 { fill: var(--c-orange); }
+.visual-money .mn-note--100 { fill: var(--c-gruen); }
+.visual-money .mn-note--200 { fill: var(--c-gelb); }
+.visual-money .mn-note-inner {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.visual-money .mn-plate {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.visual-money .mn-label {
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-money .mn-label--note { font-size: 19px; }
+
+/* Print: black and white friendly */
+.visual-money.visual--print .mn-coin,
+.visual-money.visual--print .mn-note { fill: var(--surface); }
+.visual-money.visual--print .mn-coin-ring { stroke: var(--ink); stroke-width: 1; }
+@media print {
+  .visual-money .mn-coin,
+  .visual-money .mn-note { fill: var(--surface); }
+  .visual-money .mn-coin-ring { stroke: var(--ink); stroke-width: 1; }
+}

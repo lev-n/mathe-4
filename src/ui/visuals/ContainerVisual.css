@@ -1,0 +1,39 @@
+/* Messbecher. Colours only from tokens.css; the liquid level is also marked by a thick line. */
+.visual-container .ct-body {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.visual-container .ct-handle {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.visual-container .ct-liquid { fill: var(--fill-1); }
+.visual-container .ct-surface {
+  stroke: var(--primary);
+  stroke-width: 4;
+}
+.visual-container .ct-tick {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.visual-container .ct-tick--major { stroke-width: 2.5; }
+.visual-container .ct-num {
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-container .ct-unit {
+  font-size: 16px;
+  fill: var(--text-muted);
+}
+
+.visual-container.visual--print .ct-liquid { fill: var(--surface-2); }
+.visual-container.visual--print .ct-surface { stroke: var(--ink); }
+@media print {
+  .visual-container .ct-liquid { fill: var(--surface-2); }
+  .visual-container .ct-surface { stroke: var(--ink); }
+}

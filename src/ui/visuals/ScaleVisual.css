@@ -1,0 +1,35 @@
+/* Küchenwaage. Colours only from tokens.css. */
+.visual-scale .sc-dial {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+.visual-scale .sc-tick {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.visual-scale .sc-tick--major { stroke-width: 3; }
+.visual-scale .sc-num {
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-scale .sc-unit {
+  font-size: 20px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+.visual-scale .sc-pointer { fill: var(--primary); }
+.visual-scale .sc-pointer-line {
+  stroke: var(--primary);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.visual-scale .sc-center { fill: var(--ink); }
+
+.visual-scale.visual--print .sc-pointer { fill: var(--ink); }
+.visual-scale.visual--print .sc-pointer-line { stroke: var(--ink); }
+@media print {
+  .visual-scale .sc-pointer { fill: var(--ink); }
+  .visual-scale .sc-pointer-line { stroke: var(--ink); }
+}

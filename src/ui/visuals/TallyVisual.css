@@ -1,0 +1,29 @@
+/* Strichliste. Colours only from tokens.css. */
+.visual-tally .tl-title {
+  font-size: 20px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-tally .tl-cat {
+  font-size: 18px;
+  fill: var(--text);
+}
+.visual-tally .tl-frame {
+  fill: var(--surface);
+  stroke: var(--grid-line);
+  stroke-width: 1.5;
+}
+.visual-tally .tl-sep {
+  stroke: var(--grid-line);
+  stroke-width: 1.5;
+}
+.visual-tally .tl-stroke {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.visual-tally.visual--print .tl-frame { fill: none; }
+@media print {
+  .visual-tally .tl-frame { fill: none; }
+}

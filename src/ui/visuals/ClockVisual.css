@@ -1,0 +1,55 @@
+/* Analoge Uhr. Colours only from tokens.css; the hands differ by length and width as well. */
+.visual-clock .ck-face {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 4;
+}
+.visual-clock .ck-tick {
+  stroke: var(--grid-line);
+  stroke-width: 1.5;
+}
+.visual-clock .ck-tick--major {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.visual-clock .ck-num {
+  font-size: 22px;
+  font-weight: 700;
+  fill: var(--text);
+  /* White halo: a hand passing under a number never hides it. */
+  stroke: var(--surface);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.visual-clock .ck-hand {
+  stroke-linecap: round;
+}
+.visual-clock .ck-hand--hour {
+  stroke: var(--ink);
+  stroke-width: 9;
+}
+.visual-clock .ck-hand--minute {
+  stroke: var(--primary);
+  stroke-width: 5;
+}
+.visual-clock .ck-center { fill: var(--ink); }
+.visual-clock .ck-digital {
+  fill: var(--surface-2);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.visual-clock .ck-digital-text {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  fill: var(--text);
+}
+
+/* Print: black and white */
+.visual-clock.visual--print .ck-hand--minute { stroke: var(--ink); }
+.visual-clock.visual--print .ck-digital { fill: var(--surface); }
+@media print {
+  .visual-clock .ck-hand--minute { stroke: var(--ink); }
+  .visual-clock .ck-digital { fill: var(--surface); }
+}

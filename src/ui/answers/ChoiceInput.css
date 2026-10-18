@@ -1,0 +1,110 @@
+/* Choice answers: list / symbols / grid / scale. Options ≥ 64 px, gaps ≥ 8 px. */
+.ans-choice {
+  display: grid;
+  gap: var(--gap-tap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ans-choice--list { grid-template-columns: minmax(0, 1fr); max-width: 36rem; }
+.ans-choice--symbols { grid-template-columns: repeat(auto-fit, minmax(var(--tap-lg), 5.5rem)); justify-content: start; }
+.ans-choice--grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+/* An ordered scale of short words in one row (wraps on narrow screens, order stays left → right). */
+.ans-choice--scale { grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); max-width: 40rem; }
+
+.ans-choice__option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-lg);
+  min-width: var(--tap-lg);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: var(--fs-lead);
+  line-height: 1.3;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background var(--motion-ms), border-color var(--motion-ms);
+}
+.ans-choice__option.is-locked { cursor: default; }
+/* Hover only for real pointers (on touch the tint sticks to the last tapped option). */
+@media (hover: hover) and (pointer: fine) {
+  .ans-choice__option:hover { background: var(--surface-2); }
+  .ans-choice__option.is-locked:hover { background: var(--surface); }
+}
+
+.ans-choice__radio {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.ans-choice__option.is-selected {
+  border-color: var(--primary);
+  border-width: 4px;
+  padding: calc(var(--space-3) - 2px) calc(var(--space-4) - 2px);
+  background: var(--primary-soft);
+}
+.ans-choice__option.is-selected .ans-choice__radio {
+  border-color: var(--primary);
+  background: radial-gradient(circle, var(--primary) 0 45%, var(--surface) 50%);
+}
+.ans-choice__option.is-wrong { border-color: var(--retry); background: var(--retry-soft); }
+.ans-choice__option.is-wrong .ans-choice__radio { border-color: var(--retry); background: radial-gradient(circle, var(--retry) 0 45%, var(--surface) 50%); }
+.ans-choice__option.is-right { border-color: var(--ok); background: var(--ok-soft); }
+
+.ans-choice__label { flex: 1 1 auto; overflow-wrap: anywhere; }
+.ans-choice__option .field-mark { flex: none; }
+
+/* Symbols: large single signs (<, >, =) */
+.ans-choice--symbols .ans-choice__option {
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  min-height: 5.5rem;
+  font-size: var(--fs-task);
+  font-weight: 700;
+}
+.ans-choice--symbols .ans-choice__option.is-selected { padding: calc(var(--space-2) - 2px); }
+.ans-choice--symbols .ans-choice__radio { width: 1.1rem; height: 1.1rem; }
+.ans-choice--symbols .ans-choice__label { flex: none; line-height: 1; }
+
+/* Grid: options with a picture */
+.ans-choice--grid .ans-choice__option {
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+.ans-choice--grid .ans-choice__radio { align-self: flex-start; }
+.ans-choice__visual { display: flex; justify-content: center; }
+.ans-choice__visual .visual { max-height: 12rem; width: auto; }
+.ans-choice--grid .field-mark { align-self: center; }
+
+/*
+ * Wide: options whose pictures carry text (charts, Glücksräder, tables …). One option per row and the
+ * picture at its own size (it is drawn with text ≥ 16 px); shrinking it into a third of the card made
+ * axis ticks and colour words 7–9 px. Worksheets: two per row (≈ 9 pt text on paper).
+ */
+.ans-choice--wide { grid-template-columns: minmax(0, 1fr); }
+.ans-choice--wide .ans-choice__visual .visual { max-height: none; width: auto; max-width: 100%; }
+.ans-choice--wide .ans-choice__visual > * { max-width: 100%; min-width: 0; }
+/* Worksheet preview on screen (worksheet.css exempts --wide from its 30 mm picture cap and option grid). */
+.ans-choice.ans-choice--wide.ans-choice--print { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ans-choice.ans-choice--wide.ans-choice--print .ans-choice__visual .visual { width: 100%; height: auto; max-height: none; }
+@media print {
+  .ans-choice.ans-choice--wide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ans-choice.ans-choice--wide .ans-choice__visual .visual { width: 100%; height: auto; max-height: none; }
+  .ans-choice.ans-choice--wide .ans-choice__option { break-inside: avoid; }
+}
+
+@media print {
+  .ans-choice__option { border-color: var(--ink); background: var(--surface); }
+}

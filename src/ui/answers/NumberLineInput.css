@@ -1,0 +1,113 @@
+/* Zahlenstrahl answer (APG slider with tap-to-place). */
+.nl-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
+.nl-input__help {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.nl-input__slider {
+  min-height: var(--tap-lg);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  cursor: pointer;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.nl-input__slider:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.nl-input__slider.is-disabled { cursor: default; }
+@media (hover: hover) and (pointer: fine) {
+  .nl-input__slider:hover { border-color: var(--border); }
+  .nl-input__slider.is-disabled:hover { border-color: var(--border-subtle); }
+}
+
+.nl-input__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/*
+ * Narrower than the line's minimum width (NL_MIN_WIDTH = 560 px, see NumberLineVisual.css) the line scrolls sideways:
+ * let a horizontal swipe scroll it (a tap still places the arrow, see NumberLineInput).
+ */
+.nl-input__scroll {
+  container-type: inline-size;
+  /* a size container has no intrinsic width, and .nl-scroll's auto margins stop the flex stretch:
+     without an explicit width the line collapses to 0 px and is invisible */
+  width: 100%;
+}
+@container (max-width: 559px) {
+  .nl-input__slider { touch-action: pan-x pan-y; }
+}
+
+/* Step buttons and the matching help sentence: only for touch screens (keyboards have the arrow keys). */
+.nl-input__help-touch,
+.nl-input__steps { display: none; }
+.nl-input__steps {
+  justify-content: center;
+  gap: var(--space-4);
+}
+.nl-input__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-lg);
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--primary);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.nl-input__step:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.nl-input__step:disabled {
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+  cursor: default;
+}
+@media (any-pointer: coarse) {
+  .nl-input__help-touch { display: inline; }
+  .nl-input__steps { display: flex; }
+}
+@media (hover: none) and (pointer: coarse) {
+  .nl-input__help-keys { display: none; }
+}
+
+.nl-input__status {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 650;
+}
+.nl-input__status--wrong { color: var(--retry); }
+.nl-input__status--right,
+.nl-input__status--solution { color: var(--ok); }
+
+.nl-input--print .nl-input__svg { max-width: 100%; }
+
+@media print {
+  .nl-input__help,
+  .nl-input__steps,
+  .nl-input__status { display: none; }
+  .nl-input__slider { border-color: transparent; }
+}

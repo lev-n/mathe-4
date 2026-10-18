@@ -1,0 +1,100 @@
+/* Number and multi-field answers (shared field marks). */
+.ans-label {
+  display: block;
+  font-size: var(--fs-small);
+  font-weight: 650;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.ans-number { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+.ans-number__row,
+.ans-multi__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--fs-lead);
+}
+.ans-number__text { font-size: var(--fs-lead); }
+.ans-number__input { width: 9ch; max-width: 100%; }
+.num-input.is-muted { opacity: 0.6; }
+.num-input[readonly] { cursor: default; }
+
+/* Marks: colour + icon (+ text for the solution) */
+.field-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-small);
+  font-weight: 650;
+}
+.field-mark svg { flex: none; }
+.field-mark--wrong { color: var(--retry); }
+.field-mark--right,
+.field-mark--solution { color: var(--ok); }
+
+/* "Nicht lösbar" toggle */
+.ans-unsolvable {
+  min-height: var(--tap-lg);
+  justify-content: flex-start;
+  text-align: left;
+  font-weight: 600;
+}
+.ans-unsolvable__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-weight: 800;
+  line-height: 1;
+}
+.ans-unsolvable.is-pressed {
+  border-color: var(--primary);
+  border-width: 3px;
+  background: var(--primary-soft);
+}
+.ans-unsolvable.is-pressed .ans-unsolvable__box { border-color: var(--primary); color: var(--primary); }
+.ans-number__unsolvable { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+
+/* Multi */
+.ans-multi { display: flex; flex-direction: column; gap: var(--space-3); }
+.ans-multi__field { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ans-multi__input { width: 6ch; }
+.ans-multi__input--wide { width: 9ch; }
+/*
+ * A clock time (hours : minutes Uhr) stays on one line: 2-digit fields, and the minutes field may shrink to
+ * its input (flex-basis 0) so that only 'Uhr' and the mark move to a new line when space runs out. Hours
+ * and minutes are split only as a last resort (very large text on 320 px), never by overflowing.
+ */
+.ans-multi__group { display: inline-flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2); max-width: 100%; }
+.ans-multi__group > .ans-multi__field:last-child { flex: 1 1 0; }
+.ans-multi__input--time { width: 3.6ch; min-width: var(--tap); padding-inline: var(--space-2); }
+
+/* Print: empty boxes */
+.print-box {
+  display: inline-block;
+  min-width: 5.5rem;
+  height: 2.6rem;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.print-box--sm { min-width: 3.5rem; }
+.ans-number__print-option { font-size: var(--fs-body); }
+
+@media print {
+  .num-input { border-color: var(--ink); background: var(--surface); }
+}
+
+/* Phones: the label sits beside the field (one line less), so task, field and Ziffernblock fit on screen together. */
+@media (max-width: 480px) {
+  .ans-number { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+  .ans-number > .ans-label { margin-bottom: 0; }
+  .ans-number > .ans-number__unsolvable { flex-basis: 100%; }
+}

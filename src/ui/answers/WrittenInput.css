@@ -1,0 +1,126 @@
+/* Written calculation answer input (Kästchen layout). Colours only from tokens.css. */
+.written-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+}
+
+.wi-scroll { max-width: 100%; overflow-x: auto; padding: var(--space-2); }
+@media (max-width: 480px) {
+  .wi-scroll { padding: var(--space-1); }
+}
+
+/* Überschlag (asked for first on Stufe 2–3) */
+.wi-ueb { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); max-width: 100%; }
+.wi-ueb__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2) var(--space-3); font-size: var(--fs-lead); }
+.wi-ueb__label { font-weight: 700; }
+.wi-ueb__approx { font-weight: 700; color: var(--text-muted); }
+.wi-ueb__input { width: 9ch; max-width: 100%; font-variant-numeric: tabular-nums; }
+.wi-ueb__input.wi-revealed { border-color: var(--primary); background: var(--primary-soft); }
+.wi-ueb__help,
+.wi-ueb__note { margin: 0; max-width: 36rem; font-size: var(--fs-small); text-align: center; }
+.wi-ueb__help { color: var(--text-muted); }
+.wi-ueb__note { font-weight: 650; color: var(--text); }
+.wi-print-ueb { margin: 0 0 2mm; align-self: flex-start; font-size: 12pt; }
+.wi-print-ueb__line { display: inline-block; width: 35mm; border-bottom: 1pt solid var(--ink); vertical-align: baseline; }
+
+.wi-table {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--fs-digit);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-inline: auto;
+}
+
+.wi-cell {
+  min-width: calc(var(--tap) + 4px);
+  height: calc(var(--tap) + 4px);
+  padding: 2px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.wi-digit { color: var(--text); }
+.wi-sign { font-weight: 700; color: var(--text); }
+
+/* Stellentafel-Kopf: E Z H T … */
+.wi-head .wi-cell { height: auto; padding-bottom: var(--space-1); }
+.wi-headcell { font-family: var(--font-ui); font-size: var(--fs-small); font-weight: 650; color: var(--text-muted); }
+.wi-headcell abbr { text-decoration: none; }
+
+/* lines: under the task (mul) and above the result */
+.wi-top-row .wi-cell { border-bottom: 3px solid var(--text); padding-bottom: var(--space-2); }
+.wi-result-row .wi-cell { border-top: 3px solid var(--text); padding-top: var(--space-2); }
+.wi-result-row--plain .wi-cell { border-top: none; }
+
+/* graded digit boxes (base: .digit-box) */
+.wi-slot { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.wi-box { font-variant-numeric: tabular-nums; }
+.wi-box.is-wrong { outline: 3px dashed var(--retry); outline-offset: 2px; }
+.wi-box.wi-revealed { border-color: var(--primary); background: var(--primary-soft); }
+.wi-mark {
+  position: absolute;
+  bottom: -1.1rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--retry);
+}
+
+/* ungraded helper boxes: Überträge, Entbündeln, Teilprodukte, Nebenrechnungen */
+.wi-helper {
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  text-align: center;
+  color: var(--topic-schriftlich);
+  caret-color: var(--primary);
+}
+.wi-helper--digit { font-size: 1.5rem; color: var(--text); border-style: solid; border-color: var(--border-subtle); }
+.wi-helper:focus-visible, .wi-box:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.wi-helper-row .wi-cell { height: calc(var(--tap) + 4px); }
+
+.wi-legend { margin: 0; font-size: var(--fs-small); color: var(--text-muted); text-align: center; max-width: 40ch; }
+
+/* division: one line '5432 : 4 = [ ][ ][ ][ ] R [ ][ ]' that wraps on small screens */
+.wi-div-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-digit);
+}
+.wi-div-task { display: inline-flex; align-items: center; }
+.wi-static { display: inline-block; min-width: 1.4ch; text-align: center; color: var(--text); }
+.wi-group { display: inline-flex; gap: 4px; }
+.wi-rest-label { padding-inline: var(--space-1); }
+.wi-scratch-toggle { font-size: var(--fs-small); }
+.wi-scratch-head .wi-cell { border-bottom: 2px solid var(--border-subtle); }
+
+/* print: static empty Kästchen */
+.wi-print-box { display: inline-block; background: var(--surface); }
+.wi-print-grid { border-collapse: collapse; margin-top: var(--space-3); }
+.wi-print-cell { width: 1.2cm; height: 1.2cm; border: 1px solid var(--border-subtle); }
+/* division worksheet: the Dividend sits in the first grid row, left-aligned, the rest of the line beside it */
+.written-input--print-div { align-items: flex-start; }
+.wi-print-div { margin-top: 0; font-family: var(--font-mono); font-size: var(--fs-digit); }
+.wi-print-digit { text-align: center; vertical-align: middle; color: var(--text); }
+.wi-print-tail { border: none; padding-left: var(--space-2); white-space: nowrap; vertical-align: middle; }
+.wi-print-tail .wi-static, .wi-print-tail .wi-group { vertical-align: middle; }
+.wi-print-tail .wi-group { margin-inline: var(--space-1); }
+
+@media print {
+  .wi-scratch-toggle, .wi-legend, .wi-carry-row, .wi-scratch-row { display: none; }
+  .wi-print-cell { border-color: var(--grid-line); }
+}

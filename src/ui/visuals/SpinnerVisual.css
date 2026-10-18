@@ -1,0 +1,40 @@
+/* Glücksrad. Colours only from tokens.css; every field also shows its colour word. */
+.visual-spinner .sp-sector {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.visual-spinner .sp-sector--rot { fill: var(--c-rot); }
+.visual-spinner .sp-sector--blau { fill: var(--c-blau); }
+.visual-spinner .sp-sector--gelb { fill: var(--c-gelb); }
+.visual-spinner .sp-sector--gruen { fill: var(--c-gruen); }
+.visual-spinner .sp-sector--lila { fill: var(--c-lila); }
+.visual-spinner .sp-sector--orange { fill: var(--c-orange); }
+.visual-spinner .sp-rim {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.visual-spinner .sp-label-box {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.visual-spinner .sp-label {
+  font-size: 17px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.visual-spinner .sp-hub { fill: var(--ink); }
+.visual-spinner .sp-pointer {
+  fill: var(--ink);
+  stroke: var(--surface);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+/* Print / worksheet: white fields, the colour words carry the information. */
+.visual-spinner.visual--print .sp-sector { fill: var(--surface); }
+@media print {
+  .visual-spinner .sp-sector { fill: var(--surface); }
+}

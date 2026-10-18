@@ -1,0 +1,24 @@
+/*
+ * Digits with a plain zero. Atkinson Hyperlegible draws 0 with a slash, which children in
+ * German primary schools do not write and can read as "Ø". The digits 0–9 therefore come from
+ * Andika (SIL OFL 1.1, unmodified files from @fontsource/andika): tabular, school-like figures.
+ * size-adjust matches Andika's cap height (0.725 em) to Atkinson's (0.668 em).
+ */
+@font-face {
+  font-family: 'Mathe Ziffern';
+  src: url('@fontsource/andika/files/andika-latin-400-normal.woff2') format('woff2');
+  font-weight: 100 549;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+  size-adjust: 92%;
+}
+@font-face {
+  font-family: 'Mathe Ziffern';
+  src: url('@fontsource/andika/files/andika-latin-700-normal.woff2') format('woff2');
+  font-weight: 550 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+  size-adjust: 92%;
+}

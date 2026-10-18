@@ -1,0 +1,12 @@
+/* Würfel. Colours only from tokens.css. */
+.visual-dice .dc-face {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.visual-dice .dc-pip { fill: var(--ink); }
+.visual-dice .dc-num {
+  font-size: 26px;
+  font-weight: 700;
+  fill: var(--text);
+}

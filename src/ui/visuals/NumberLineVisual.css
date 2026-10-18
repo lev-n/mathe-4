@@ -1,0 +1,23 @@
+/*
+ * Zahlenstrahl on narrow screens: the SVG scales with its container, so below ~560 px labels shrink under 16 px
+ * and ticks get too close to read or tap. The line keeps a minimum width and the wrapper scrolls sideways instead.
+ * Shared by NumberLineVisual (static) and NumberLineInput (answer).
+ */
+.nl-scroll {
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.nl-scroll > .visual,
+.nl-scroll > .nl-input__slider {
+  min-width: var(--nl-min-width, 560px);
+}
+
+@media print {
+  .nl-scroll { overflow: visible; }
+  .nl-scroll > .visual,
+  .nl-scroll > .nl-input__slider { min-width: 0; }
+}

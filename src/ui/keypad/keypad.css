@@ -1,0 +1,103 @@
+/* Ziffernblock: keys ≥ 64 px, gaps ≥ 8 px, sits beside or below the task (never over it). */
+.keypad {
+  width: 100%;
+  max-width: 20rem;
+  margin-inline: auto;
+}
+
+.keypad__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(var(--tap-lg), 1fr));
+  gap: var(--gap-tap);
+}
+
+.keypad__key {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-lg);
+  min-width: var(--tap-lg);
+  padding: var(--space-1);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-digit);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--motion-ms), transform var(--motion-ms);
+}
+@media (hover: hover) and (pointer: fine) {
+  .keypad__key:hover { background: var(--surface-2); }
+}
+.keypad__key:active { transform: translateY(1px); background: var(--primary-soft); }
+.keypad__key:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.keypad__key--back { font-size: var(--fs-lead); }
+.keypad__sub {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.keypad__submit {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.keypad__submit--with-hint { grid-column: span 2; }
+.keypad__hint {
+  min-height: var(--tap-lg);
+  padding-inline: var(--space-2);
+  gap: var(--space-1);
+  font-size: var(--fs-body);
+  line-height: 1.15;
+}
+.keypad__hint svg { flex: none; color: var(--primary); }
+.keypad__hint[aria-disabled='true'] { opacity: 0.6; cursor: default; font-size: var(--fs-small); }
+
+/*
+ * Phones (the keypad sits below the task): 4 columns × 4 rows instead of 3 × 5, so the task, the answer
+ * field and the whole keypad fit on the screen together. Keys stay ≥ 64 px; 0 is wide like on a
+ * calculator's number block.
+ *   7 8 9 ⌫
+ *   4 5 6 ,
+ *   1 2 3 Tipp
+ *   0 0 Prüfen
+ */
+@media (max-width: 899px) {
+  .keypad--with-hint .keypad__grid {
+    grid-template-columns: repeat(4, minmax(var(--tap-lg), 1fr));
+    grid-template-areas:
+      'd7 d8 d9 back'
+      'd4 d5 d6 comma'
+      'd1 d2 d3 hint'
+      'd0 d0 submit submit';
+  }
+  .keypad--with-hint .keypad__key--d7 { grid-area: d7; }
+  .keypad--with-hint .keypad__key--d8 { grid-area: d8; }
+  .keypad--with-hint .keypad__key--d9 { grid-area: d9; }
+  .keypad--with-hint .keypad__key--d4 { grid-area: d4; }
+  .keypad--with-hint .keypad__key--d5 { grid-area: d5; }
+  .keypad--with-hint .keypad__key--d6 { grid-area: d6; }
+  .keypad--with-hint .keypad__key--d1 { grid-area: d1; }
+  .keypad--with-hint .keypad__key--d2 { grid-area: d2; }
+  .keypad--with-hint .keypad__key--d3 { grid-area: d3; }
+  .keypad--with-hint .keypad__key--d0 { grid-area: d0; }
+  .keypad--with-hint .keypad__key--comma { grid-area: comma; }
+  .keypad--with-hint .keypad__key--back { grid-area: back; }
+  .keypad--with-hint .keypad__hint { grid-area: hint; flex-direction: column; gap: 0; padding: var(--space-1); font-size: var(--fs-small); }
+  .keypad--with-hint .keypad__hint[aria-disabled='true'] { font-size: 0.85rem; }
+  .keypad--with-hint .keypad__submit { grid-area: submit; }
+}
+
+@media print {
+  .keypad { display: none !important; }
+}

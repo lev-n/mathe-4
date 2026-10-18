@@ -1,0 +1,25 @@
+/*
+ * Answer fields get a visible focus ring also when focus was moved by the app after a tap
+ * (browsers do not show :focus-visible on widgets focused programmatically after a pointer click).
+ */
+.answer-input [data-answer-field]:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.answer-input .cells-cell[data-answer-field]:focus { outline-offset: -3px; z-index: 2; }
+
+/*
+ * Answer areas that scroll sideways on narrow screens (written columns, grids, number lines): soft edge
+ * shadows show where there is more to scroll to (same hint as the readable data pictures in base.css).
+ */
+.answer-input .wi-scroll,
+.answer-input .cells-scroll,
+.answer-input .nl-input__scroll {
+  background:
+    linear-gradient(to right, var(--surface) 40%, transparent) left / 1.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 40%, transparent) right / 1.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(28 35 51 / 22%), transparent) left / 0.6rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(28 35 51 / 22%), transparent) right / 0.6rem 100% no-repeat scroll,
+    var(--surface);
+  overscroll-behavior-x: contain;
+}
