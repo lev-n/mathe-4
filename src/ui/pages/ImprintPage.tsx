@@ -2,6 +2,7 @@
  * Impressum (§ 5 DDG, § 18 Abs. 2 MStV). Data from src/config/operator.ts — placeholders while empty, never invented.
  */
 import { OPERATOR } from '../../config/operator';
+import { DOC_TITLES } from '../../seo/meta';
 import { PageTitle } from '../app/PageTitle';
 import { Link } from '../app/router';
 import { PATHS } from '../app/routes';
@@ -11,7 +12,7 @@ export default function ImprintPage() {
   const responsible = OPERATOR.contentResponsible.trim() || OPERATOR.name.trim();
   return (
     <div className="page legal-page">
-      <PageTitle docTitle="Impressum">Impressum</PageTitle>
+      <PageTitle docTitle={DOC_TITLES.imprint}>Impressum</PageTitle>
       <div className="prose">
         <h2>Angaben gemäß § 5 DDG</h2>
         <OperatorAddress />

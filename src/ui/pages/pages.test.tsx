@@ -335,13 +335,6 @@ describe('Legal pages', () => {
     expect(text).toContain('der Betreiber erhält sie nicht');
   });
 
-  it('Seite nicht gefunden: asks search engines not to index it while shown', () => {
-    const { unmount } = render(<NotFoundPage />);
-    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex');
-    unmount();
-    expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
-  });
-
   it('Impressum: § 5 DDG with placeholders while the operator config is empty', () => {
     render(<ImprintPage />);
     expect(screen.getByRole('heading', { name: 'Angaben gemäß § 5 DDG' })).toBeTruthy();

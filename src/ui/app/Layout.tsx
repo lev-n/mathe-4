@@ -63,7 +63,7 @@ export function Layout({ children, minimal = false }: { children: ReactNode; min
       </main>
       <footer className="site-footer">
         <div className="site-footer__inner">
-          <p className="site-footer__note">Mathe 4 – ohne Anmeldung, ohne Werbung.</p>
+          <p className="site-footer__note">Mathe 4 – Mathe üben für die 4. Klasse, ohne Anmeldung, ohne Werbung.</p>
           <ul className="site-footer__links">
             <li>
               <NavLink to={PATHS.privacy}>Datenschutz</NavLink>

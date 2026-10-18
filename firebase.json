@@ -5,7 +5,14 @@
     "cleanUrls": true,
     "trailingSlash": false,
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [
+      { "source": "/ueben/**", "destination": "/app.html" },
+      { "source": "/mix/**", "destination": "/app.html" },
+      { "source": "/wiederholen", "destination": "/app.html" },
+      { "source": "/blitz", "destination": "/app.html" },
+      { "source": "/fortschritt", "destination": "/app.html" },
+      { "source": "/abzeichen", "destination": "/app.html" }
+    ],
     "headers": [
       {
         "source": "**",

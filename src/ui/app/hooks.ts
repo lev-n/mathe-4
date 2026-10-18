@@ -2,14 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TopicId, TopicModule } from '../../core/types';
 import type { Settings } from '../../state/types';
-import { TOPICS, loadTopic } from '../../topics/registry';
+import { documentTitle } from '../../seo/meta';
+import { TOPICS, loadTopic, loadedTopic } from '../../topics/registry';
 
-export const APP_NAME = 'Mathe 4';
-
-/** Sets document.title to '<title> – Mathe 4' (or the plain app title for the home page). */
+/** Sets document.title to '<title> – Mathe 4' (or the start page title for null), see src/seo/meta.ts. */
 export function useDocumentTitle(title: string | null): void {
   useEffect(() => {
-    document.title = title ? `${title} – ${APP_NAME}` : `${APP_NAME} – Üben für die 4. Klasse`;
+    document.title = documentTitle(title);
   }, [title]);
 }
 
@@ -36,7 +35,10 @@ export function useHtmlSettings(settings: Settings): void {
 
 export type LoadState<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error' };
 
-/** Lazily loads one topic module (cached by the registry). */
+/**
+ * Lazily loads one topic module (cached by the registry). A module that is already loaded is 'ready' on
+ * the first render, so a prerendered topic page hydrates with the same content it was rendered with.
+ */
 export function useTopicModule(topicId: TopicId | null): LoadState<TopicModule> {
   const [state, setState] = useState<{ id: TopicId | null; value: LoadState<TopicModule> }>({ id: null, value: { status: 'loading' } });
   useEffect(() => {
@@ -50,7 +52,9 @@ export function useTopicModule(topicId: TopicId | null): LoadState<TopicModule> 
       alive = false;
     };
   }, [topicId]);
-  return state.id === topicId ? state.value : { status: 'loading' };
+  if (state.id === topicId) return state.value;
+  const loaded = topicId ? loadedTopic(topicId) : undefined;
+  return loaded ? { status: 'ready', data: loaded } : { status: 'loading' };
 }
 
 /**

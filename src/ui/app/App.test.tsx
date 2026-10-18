@@ -53,7 +53,7 @@ describe('router', () => {
   it('renders the home page at /', async () => {
     render(<App />);
     expect(h1().textContent).toBe('Hallo! Was möchtest du heute üben?');
-    expect(document.title).toBe('Mathe 4 – Üben für die 4. Klasse');
+    expect(document.title).toBe('Mathe üben für die 4. Klasse, kostenlos – Mathe 4');
     // 7 topic cards
     for (const t of TOPICS) {
       expect(screen.getByRole('link', { name: new RegExp(t.title) }).getAttribute('href')).toBe(`/thema/${t.id}`);
@@ -108,6 +108,39 @@ describe('router', () => {
     expect(document.title).toBe('Seite nicht gefunden – Mathe 4');
     fireEvent.click(screen.getByRole('link', { name: 'Zur Startseite' }));
     expect(h1().textContent).toBe('Hallo! Was möchtest du heute üben?');
+  });
+
+  it('keeps the head tags in step with client-side navigation (canonical, robots, description)', async () => {
+    const head = () => ({
+      canonical: document.head.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? null,
+      robots: [...document.head.querySelectorAll('meta[name="robots"]')].map((m) => m.getAttribute('content')),
+      description: document.head.querySelector('meta[name="description"]')?.getAttribute('content') ?? '',
+      ogUrl: document.head.querySelector('meta[property="og:url"]')?.getAttribute('content') ?? null,
+    });
+    const ld = document.createElement('script');
+    ld.type = 'application/ld+json';
+    ld.textContent = '{}';
+    document.head.appendChild(ld);
+
+    render(<App />);
+    expect(head()).toMatchObject({ canonical: 'https://mathe-4.web.app/', robots: [], ogUrl: 'https://mathe-4.web.app/' });
+    expect(document.head.contains(ld)).toBe(true);
+
+    act(() => navigate('/thema/geometrie'));
+    expect(head()).toMatchObject({ canonical: 'https://mathe-4.web.app/thema/geometrie', robots: [] });
+    expect(head().description).toMatch(/^Geometrie üben für die 4\. Klasse/);
+    // Structured data belongs to the page the HTML file was prerendered for.
+    expect(document.head.contains(ld)).toBe(false);
+    await waitFor(() => expect(document.title).toBe('Geometrie üben für die 4. Klasse – Mathe 4'));
+
+    act(() => navigate('/gibt-es-nicht'));
+    expect(head()).toMatchObject({ canonical: null, robots: ['noindex'], ogUrl: null });
+
+    act(() => navigate('/ueben/zahlen.runden/2'));
+    expect(head()).toMatchObject({ canonical: null, robots: ['noindex'] });
+
+    act(() => navigate('/arbeitsblatt'));
+    expect(head()).toMatchObject({ canonical: 'https://mathe-4.web.app/arbeitsblatt', robots: [] });
   });
 
   it('shows 404 for an unknown skill of a valid topic (after loading the topic)', async () => {

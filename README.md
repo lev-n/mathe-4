@@ -42,6 +42,15 @@ An interactive math practice portal for 4th-grade students (Klasse 4, Grundschul
 
 > **Before going public:** fill in the operator details in [`src/config/operator.ts`](src/config/operator.ts). The Impressum (§ 5 DDG) and Datenschutzerklärung (Art. 13 DSGVO) show a marked placeholder until then, the build prints a warning, and `npm run deploy` (as well as a plain `firebase deploy`, via the `predeploy` hook in `firebase.json`) refuses to deploy (`npm run check:operator`). Only for a private preview that is not shared publicly can `ALLOW_MISSING_OPERATOR=1` turn this into a warning. The legal texts are a careful starting point, not legal advice.
 
+## Search engines and link previews
+
+- **Prerendered pages.** `npm run build` renders every page that has content for a first visitor to static HTML: the start page, the seven topic pages, Arbeitsblätter, Für Erwachsene, Datenschutz and Impressum (`src/seo/prerender.tsx`, written to `dist/` by `scripts/prerender.mjs`). Crawlers that do not run JavaScript (most AI crawlers, link previews in messengers) see the real content, and every visitor gets a first paint without waiting for the script. The browser then hydrates the page; progress stored on the device appears right after. `src/seo/hydrate.test.tsx` fails if a prerendered page no longer matches the browser's first render.
+- **Per-page metadata** (`src/seo/meta.ts`, one source for the build and for client-side navigation): a unique title and description, a self-referencing canonical link (so `mathe-4.firebaseapp.com` and other duplicates point to `mathe-4.web.app`), Open Graph / X card tags with `public/og-image.png`, and schema.org JSON-LD (`src/seo/structuredData.ts`): `WebSite` for the site name, `LearningResource` and `BreadcrumbList` for the topic pages and the worksheets.
+- **What gets indexed.** The start page, the topic pages, the worksheets and the page for adults, all listed in `sitemap.xml`. Practice rounds (random tasks), Mein Fortschritt and Abzeichen (personal), Datenschutz, Impressum and "not found" carry `noindex`.
+- **Status codes.** Firebase serves practice rounds and the personal pages from a noindex app shell (`app.html`) and every unknown path from `404.html` with HTTP status 404, so there are no "soft 404s". `src/seo/prerender.test.ts` checks that `firebase.json` covers every route.
+- **robots.txt** allows all crawlers, including AI search crawlers, and points to the sitemap. Noindex pages stay crawlable, so search engines can see the tag.
+- **After the first deployment:** submit `https://mathe-4.web.app/sitemap.xml` in Google Search Console and Bing Webmaster Tools.
+
 ## Run, test, build
 
 Requirements: Node.js 22.22+, 24.15+ or 26+ (developed and tested in CI with Node 26), npm.
@@ -52,7 +61,7 @@ npm run dev          # start the dev server → http://localhost:5173
 npm test             # run all unit/integration tests once (Vitest)
 npm run test:watch   # tests in watch mode
 npm run typecheck    # TypeScript (strict), no emit
-npm run build        # typecheck + production build to dist/ + privacy/budget check (+ operator-data warning)
+npm run build        # typecheck + production build + prerendered pages to dist/ + privacy/budget check (+ operator-data warning)
 npm run preview      # serve the production build locally
 ```
 
@@ -60,7 +69,7 @@ The tests cover every exercise generator (a shared invariant suite in `src/core/
 
 ## Deploy to Firebase Hosting
 
-The project is configured for the Firebase project **`mathe-4`** (`.firebaserc`), serving `dist/` with an SPA rewrite and security headers (`firebase.json`).
+The project is configured for the Firebase project **`mathe-4`** (`.firebaserc`), serving `dist/` with the prerendered pages, rewrites for the client-only routes, a real 404 and security headers (`firebase.json`).
 
 ```bash
 npm install -g firebase-tools   # once
@@ -68,7 +77,7 @@ firebase login                  # once
 npm run deploy                  # = operator-data check && npm test && npm run build && firebase deploy --only hosting
 ```
 
-The site is then live at https://mathe-4.web.app (and https://mathe-4.firebaseapp.com). To deploy to another project: `firebase use --add` or edit `.firebaserc`.
+The site is then live at https://mathe-4.web.app (and https://mathe-4.firebaseapp.com). To deploy to another project: `firebase use --add` or edit `.firebaserc`, and set the public address in [`src/config/site.ts`](src/config/site.ts) (canonical links, sitemap, link previews).
 
 ## Project structure
 
@@ -82,8 +91,11 @@ src/ui/practice/          practice round: hints, feedback, worked solutions, sum
 src/ui/answers/           answer inputs (number, choice, multi, order, written columns, cells grid, number line)
 src/ui/visuals/           hand-written SVG visuals (Stellentafel, Zahlenstrahl, Uhr, Diagramme, Körper, Netze …)
 src/ui/pages/, src/ui/app/ pages, router, layout, worksheet mode, settings
+src/seo/                  search metadata, structured data, build-time prerendering (+ hydration tests)
 src/config/operator.ts    Impressum/Datenschutz operator details (fill in before going public)
-scripts/check-dist.mjs    build guard: no third-party hosts, no inline scripts, bundle budget
+src/config/site.ts        public address of the site (canonical links, sitemap, link previews)
+scripts/prerender.mjs     writes the prerendered pages, 404.html, app shell, sitemap.xml and robots.txt
+scripts/check-dist.mjs    build guard: no third-party hosts, no inline scripts or styles, bundle budget
 ```
 
 ### Adding a skill

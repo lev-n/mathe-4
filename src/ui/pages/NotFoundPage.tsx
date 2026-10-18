@@ -1,26 +1,12 @@
-import { useEffect } from 'react';
+import { DOC_TITLES } from '../../seo/meta';
 import { PageTitle } from '../app/PageTitle';
 import { Link } from '../app/router';
 import { PATHS } from '../app/routes';
 
-export const NOT_FOUND_TITLE = 'Seite nicht gefunden';
-
-/**
- * Firebase Hosting answers every unknown path with index.html and status 200 (SPA rewrite), so search
- * engines are told not to index this page while it is shown.
- */
-export function useNoIndex(): void {
-  useEffect(() => {
-    const meta = document.createElement('meta');
-    meta.name = 'robots';
-    meta.content = 'noindex';
-    document.head.appendChild(meta);
-    return () => meta.remove();
-  }, []);
-}
+/** Also used for an unknown skill under /ueben/ (PracticeRoute). Search engines get noindex via src/seo/meta.ts. */
+export const NOT_FOUND_TITLE = DOC_TITLES.notFound;
 
 export default function NotFoundPage() {
-  useNoIndex();
   return (
     <div className="page page--narrow not-found">
       <PageTitle docTitle={NOT_FOUND_TITLE}>Diese Seite gibt es nicht</PageTitle>

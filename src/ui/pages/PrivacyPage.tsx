@@ -4,6 +4,7 @@
  * Operator data comes from src/config/operator.ts (placeholders while empty — never invented).
  */
 import { OPERATOR } from '../../config/operator';
+import { DOC_TITLES } from '../../seo/meta';
 import { STORAGE_KEY } from '../../state/store';
 import { PageTitle } from '../app/PageTitle';
 import { Link } from '../app/router';
@@ -16,7 +17,7 @@ export { KIDS_PRIVACY };
 export default function PrivacyPage() {
   return (
     <div className="page legal-page">
-      <PageTitle docTitle="Datenschutz">Datenschutz</PageTitle>
+      <PageTitle docTitle={DOC_TITLES.privacy}>Datenschutz</PageTitle>
 
       <section className="kids-box" aria-labelledby="kids-title">
         <h2 id="kids-title">Für Kinder erklärt</h2>
