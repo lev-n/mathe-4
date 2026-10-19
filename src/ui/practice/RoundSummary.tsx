@@ -25,8 +25,57 @@ export interface MasteryLine {
 export interface SummaryNote {
   key: string;
   text: string;
+  /** What a screen reader reads instead, when the text uses symbols ('3 · 7' → '3 mal 7'). */
+  spoken?: string;
   /** Kinds 3–5 (error overcome, skill improved, lasting improvement). */
   big: boolean;
+}
+
+/** "Das hast du verbessert": shown after practice only (round summary, goodbye after a break), never mid-round. */
+export function ImprovedNotes({ notes }: { notes: readonly SummaryNote[] }) {
+  if (notes.length === 0) return null;
+  return (
+    <div className="pr-improved">
+      <h3 className="pr-improved__title">{IMPROVED_HEADING}</h3>
+      <ul className="pr-improved__list">
+        {notes.map((n) => (
+          <li key={n.key} className={`pr-improved__line${n.big ? ' is-big' : ''}`}>
+            {n.spoken ? (
+              <>
+                <span aria-hidden="true">{n.text}</span>
+                <span className="visually-hidden">{n.spoken}</span>
+              </>
+            ) : (
+              n.text
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Newly earned badges, revealed calmly after practice. */
+export function NewBadges({ badges }: { badges: readonly BadgeDef[] }) {
+  if (badges.length === 0) return null;
+  return (
+    <div className="pr-badges">
+      <h3 className="pr-badges__title">{badges.length === 1 ? 'Neues Abzeichen' : 'Neue Abzeichen'}</h3>
+      <ul className="pr-badges__list">
+        {badges.map((b) => (
+          <li key={b.id} className="pr-badge">
+            <span className="pr-badge__icon" aria-hidden="true">
+              {b.icon}
+            </span>
+            <span className="pr-badge__text">
+              <strong>{b.title}</strong>
+              <span>{b.description}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export interface RoundSummaryProps {
@@ -95,39 +144,8 @@ export default function RoundSummary({
         </ul>
       )}
 
-      {notes.length > 0 && (
-        <section className="pr-improved" aria-labelledby="pr-improved-h">
-          <h3 className="pr-improved__title" id="pr-improved-h">
-            {IMPROVED_HEADING}
-          </h3>
-          <ul className="pr-improved__list">
-            {notes.map((n) => (
-              <li key={n.key} className={`pr-improved__line${n.big ? ' is-big' : ''}`}>
-                {n.text}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {badges.length > 0 && (
-        <div className="pr-badges">
-          <h3 className="pr-badges__title">{badges.length === 1 ? 'Neues Abzeichen' : 'Neue Abzeichen'}</h3>
-          <ul className="pr-badges__list">
-            {badges.map((b) => (
-              <li key={b.id} className="pr-badge">
-                <span className="pr-badge__icon" aria-hidden="true">
-                  {b.icon}
-                </span>
-                <span className="pr-badge__text">
-                  <strong>{b.title}</strong>
-                  <span>{b.description}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ImprovedNotes notes={notes} />
+      <NewBadges badges={badges} />
 
       <div className="pr-pair no-print">
         <button type="button" className="btn btn--lg" onClick={act(onAgain)}>

@@ -2,7 +2,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPERATOR_PLACEHOLDER } from '../../config/operator';
-import { BANNED_PHRASES } from '../../core/testing';
+import { BANNED_PHRASES, IMPROVEMENT_BANNED_PHRASES } from '../../core/testing';
 import type { TopicId } from '../../core/types';
 import { dueFacts, dueReviews, practisedTopics, weekProgress } from '../../state/selectors';
 import type { AnswerEvent, Consent, ProgressState } from '../../state/types';
@@ -316,78 +316,97 @@ describe('ProgressPage: "So hast du dich verbessert"', () => {
     return s;
   }
 
+  /** The block under a topic: an h3 named "So hast du dich verbessert: <topic>" (no extra landmark). */
+  async function growthIn(topic: RegExp): Promise<HTMLElement> {
+    const region = await screen.findByRole('region', { name: topic });
+    const heading = await within(region).findByRole('heading', { level: 3, name: /^So hast du dich verbessert/ });
+    return heading.closest<HTMLElement>('.progress-growth')!;
+  }
+  const linesOf = (block: HTMLElement) => [...block.querySelectorAll('.progress-growth__lines li')].map((li) => li.textContent);
+
   it('lists only improvements per skill, positively worded, under the topic', async () => {
     current.state = improvedState();
     render(<ProgressPage />);
-    const zahlen = await screen.findByRole('region', { name: /^Zahlen bis/ });
-    const growth = await within(zahlen).findByRole('region', { name: 'So hast du dich verbessert' });
-    expect(within(growth).getByRole('heading', { level: 3, name: 'So hast du dich verbessert' })).toBeTruthy();
-    const skills = within(growth).getAllByRole('listitem').filter((li) => li.classList.contains('progress-growth__skill'));
+    const growth = await growthIn(/^Zahlen bis/);
+    // the heading names the topic for screen readers (headings list), like the table caption does
+    expect(within(growth).getByRole('heading', { level: 3 }).textContent).toMatch(/^So hast du dich verbessert: Zahlen bis/);
+    expect(screen.queryByRole('region', { name: /So hast du dich verbessert/ })).toBeNull();
+    const skills = [...growth.querySelectorAll('.progress-growth__skill')];
     expect(skills.map((li) => li.querySelector('.progress-growth__name')!.textContent)).toEqual(['Runden']);
-    expect(within(skills[0]).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    expect(linesOf(growth)).toEqual([
       'Stufe 1: Am Anfang 4 von 10 auf Anhieb, später 9 von 10.',
-      'Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt „Sicher“.',
-      'Stufe 2: Etwas, das vorher knifflig war, hast du Tage später in der Wiederholung auf Anhieb gelöst.',
+      'Stufe 2: Am Anfang 4 von 10 auf Anhieb – jetzt ist die Stufe „Sicher“.',
+      'Stufe 2: In der Wiederholung hast du auf Anhieb gelöst, was ein paar Tage vorher noch knifflig war.',
     ]);
     // Stellenwerte got worse: nothing is said about it.
     expect(growth.textContent).not.toContain('Stellenwerte');
-    const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
-    const lines = within(within(schriftlich).getByRole('region', { name: 'So hast du dich verbessert' })).getAllByRole('listitem').map((li) => li.textContent);
+    const lines = linesOf(await growthIn(/Schriftlich/));
     expect(lines).toContain('Du hast den Übertrag fünfmal richtig beachtet.');
     // not yet overcome: nothing is said about it
     expect(lines.join(' ')).not.toMatch(/stellengerecht|untereinander/i);
   });
 
+  it('says "Früher" for progress saved before the tracking existed, and never "0 von 10"', async () => {
+    const s = stateWith({ 'zahlen.runden#1': progress('geuebt'), 'zahlen.runden#2': progress('sicher') });
+    s.growth = {
+      stufen: {
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 3, earlyWrong: 7, earlyDay: '2026-10-10', carried: true, after: 10, best: 8 },
+        'zahlen.runden#2': { earlyN: 10, earlyOk: 0, earlyWrong: 10, earlyDay: '2026-10-10', after: 10, best: 7 },
+      },
+      errors: {},
+      facts: {},
+    };
+    current.state = s;
+    render(<ProgressPage />);
+    expect(linesOf(await growthIn(/^Zahlen bis/))).toEqual([
+      'Stufe 1: Früher 3 von 10 auf Anhieb, später 8 von 10.',
+      'Stufe 2: Am Anfang war das noch knifflig – später 7 von 10 auf Anhieb.',
+    ]);
+  });
+
   it('an overcome error in written subtraction is worded for the child’s subtraction method', async () => {
     const withMethod = (subtractionMethod: 'abziehen' | 'ergaenzen') => {
-      const s = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) }, { settings: { ...stateWith().settings, subtractionMethod } });
-      s.growth = { stufen: {}, errors: { 'schriftlich.plus': { entbuendeln: { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' } } }, facts: {} };
-      return s;
-    };
-    const lines = async () => {
-      const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
-      const growth = await within(schriftlich).findByRole('region', { name: 'So hast du dich verbessert' });
-      return within(growth).getAllByRole('listitem').map((li) => li.textContent);
+      const st = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) }, { settings: { ...stateWith().settings, subtractionMethod } });
+      st.growth = { stufen: {}, errors: { 'schriftlich.plus': { entbuendeln: { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' } } }, facts: {} };
+      return st;
     };
     current.state = withMethod('abziehen');
     render(<ProgressPage />);
-    expect(await lines()).toContain('Du hast das Entbündeln fünfmal richtig gemacht.');
+    expect(linesOf(await growthIn(/Schriftlich/))).toContain('Du hast das Entbündeln fünfmal richtig gemacht.');
     cleanup();
     current.state = withMethod('ergaenzen');
     render(<ProgressPage />);
-    expect(await lines()).toContain('Du hast das Erweitern mit der gemerkten 1 fünfmal richtig gemacht.');
+    expect(linesOf(await growthIn(/Schriftlich/))).toContain('Du hast das Erweitern mit der gemerkten 1 fünfmal richtig gemacht.');
   });
 
   it('a tag without a family still gets a calm, positive line (said once)', async () => {
-    const s = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) });
+    const st = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) });
     const done = { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' };
-    s.growth = { stufen: {}, errors: { 'schriftlich.plus': { 'neu.fehler': done, 'noch-neuer': { ...done, done: '2026-10-15' } } }, facts: {} };
-    current.state = s;
+    st.growth = { stufen: {}, errors: { 'schriftlich.plus': { 'neu.fehler': done, 'noch-neuer': { ...done, done: '2026-10-15' } } }, facts: {} };
+    current.state = st;
     render(<ProgressPage />);
-    const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
-    const growth = await within(schriftlich).findByRole('region', { name: 'So hast du dich verbessert' });
-    expect([...growth.querySelectorAll('.progress-growth__lines li')].map((li) => li.textContent)).toEqual([
-      'Du hast die knifflige Stelle in diesen Aufgaben fünfmal richtig gelöst.',
-    ]);
+    expect(linesOf(await growthIn(/Schriftlich/))).toEqual(['Du hast die knifflige Stelle in diesen Aufgaben fünfmal richtig gelöst.']);
   });
 
   it('shows nothing (no empty box, no pressure) without improvement', async () => {
     current.state = stateWith({ 'zahlen.runden#1': progress('geuebt', { recent: [true, false] }) });
     render(<ProgressPage />);
     await screen.findByRole('table');
-    expect(screen.queryByRole('region', { name: 'So hast du dich verbessert' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /So hast du dich verbessert/ })).toBeNull();
+    expect(document.querySelector('.progress-growth')).toBeNull();
   });
 
   it('the view is plain text in headings and lists: nothing to operate, the topic link stays reachable by keyboard', async () => {
     current.state = improvedState();
     render(<ProgressPage />);
-    const growth = (await screen.findAllByRole('region', { name: 'So hast du dich verbessert' }))[0];
+    const growth = await growthIn(/^Zahlen bis/);
     expect(growth.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
+    // reading order: table, then the improvements, then "Weiter üben"
     const link = screen.getByRole('link', { name: 'Weiter üben: Zahlen' });
-    expect(link.compareDocumentPosition(growth) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(growth.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const text = document.body.textContent ?? '';
-    for (const banned of BANNED_PHRASES) expect(text.toLowerCase()).not.toContain(banned);
-    expect(text).not.toMatch(/schneller|schlau|besser als|andere Kinder/i);
+    for (const banned of IMPROVEMENT_BANNED_PHRASES) expect(text.toLowerCase(), banned).not.toContain(banned);
+    expect(text).not.toMatch(/schneller|schlau|0 von 10/i);
   });
 });
 

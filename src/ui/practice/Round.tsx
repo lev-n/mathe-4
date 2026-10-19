@@ -22,8 +22,8 @@ import BreakPrompt, { BREAK_AFTER_MS } from './BreakPrompt';
 import ConsentPrompt from './ConsentPrompt';
 import ItemView from './ItemView';
 import PracticeHeader from './PracticeHeader';
-import RoundSummary, { type MasteryLine, type SummaryNote } from './RoundSummary';
-import { isBigNote, noteText, summaryAnnouncement } from './growthText';
+import RoundSummary, { ImprovedNotes, NewBadges, type MasteryLine, type SummaryNote } from './RoundSummary';
+import { afterPracticeAnnouncement, isBigNote, noteText, spokenText, summaryAnnouncement } from './growthText';
 import WorkedExample from './WorkedExample';
 import {
   EFFORT_PHRASES,
@@ -244,8 +244,10 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
   const [live, setLive] = useState('');
   const outcomes = useRef<{ f: FinishedItem; outcome: AnswerOutcome | null }[]>([]);
   const roundRecorded = useRef(false);
-  /** In-item acknowledgements of small improvements (2nd try, twin task) given in this round (capped). */
+  /** Effort lines after a 2nd try given in this round (capped; twin lines are limited by MAX_TWINS already). */
   const smallAcks = useRef(0);
+  /** Improvements and badges for the goodbye screen when the round ends at the break suggestion (no summary). */
+  const [farewell, setFarewell] = useState<{ notes: SummaryNote[]; badges: BadgeDef[] } | null>(null);
   const entryFocus = !autoFocus && !boot.session.example && entryFocusAllowed(keypadOn);
   const pendingFocus = useRef<FocusTarget>(
     autoFocus ? (boot.session.example ? 'example' : 'item') : entryFocus ? 'item' : focusHeading ? 'heading' : null,
@@ -402,11 +404,12 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     if (item.phase === 'solved') {
       const f = next.finished[next.finished.length - 1];
       const lines: string[] = [];
-      // Small improvements get one calm line, a few times per round at most (docs/research.md M16).
-      const twinSolved = f?.purpose === 'twin' && f.firstTry;
-      if ((f?.secondTry || twinSolved) && smallAcks.current < SMALL_ACKS_PER_ROUND) {
+      // Small improvements get one calm line (docs/research.md M16): a twin task solved first try (at most
+      // MAX_TWINS per round), a 2nd try a few times per round at most, so wrong answers on purpose do not pay.
+      if (f?.purpose === 'twin' && f.firstTry) lines.push(rotate(TWIN_SOLVED_PHRASES, shared.praiseCounter++));
+      else if (f?.secondTry && smallAcks.current < SMALL_ACKS_PER_ROUND) {
         smallAcks.current += 1;
-        lines.push(rotate(f.secondTry ? EFFORT_PHRASES : TWIN_SOLVED_PHRASES, shared.praiseCounter++));
+        lines.push(rotate(EFFORT_PHRASES, shared.praiseCounter++));
       }
       lines.push(exercise.praise);
       setPraise(lines);
@@ -434,6 +437,22 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     }
   };
 
+  /** "Das hast du verbessert" and new badges from the answers recorded so far (`extra`: badges for finishing). */
+  const improvementsSoFar = (finished: readonly FinishedItem[], extra: readonly BadgeDef[] = []) => {
+    const method = store.get().settings.subtractionMethod;
+    const events: GrowthEvent[] = outcomes.current.flatMap(({ outcome }) => outcome?.growth ?? []);
+    const titleOf = (id: string) => skillMap.get(id)?.title ?? id;
+    const notes: SummaryNote[] = roundNotes(finished, events).map((n, i) => {
+      const text = noteText(n, titleOf, method);
+      const spoken = spokenText(text);
+      return spoken ? { key: `${n.kind}-${i}`, text, spoken, big: isBigNote(n) } : { key: `${n.kind}-${i}`, text, big: isBigNote(n) };
+    });
+    const badges = new Map<string, BadgeDef>();
+    for (const { outcome } of outcomes.current) outcome?.newBadges.forEach((b) => badges.set(b.id, b));
+    extra.forEach((b) => badges.set(b.id, b));
+    return { notes, badges: [...badges.values()] };
+  };
+
   const finishRound = (s: SessionState) => {
     if (roundRecorded.current) return;
     roundRecorded.current = true;
@@ -458,15 +477,9 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
       if (outcome && outcome.after !== outcome.before && (outcome.after === 'sicher' || outcome.after === 'gemeistert')) line.levelUp = true;
       seen.set(key, line);
     }
-    const badges = new Map<string, BadgeDef>();
-    for (const { outcome } of outcomes.current) outcome?.newBadges.forEach((b) => badges.set(b.id, b));
-    roundBadges.forEach((b) => badges.set(b.id, b));
     const suggest = outcomes.current.some(({ outcome }) => outcome?.suggestNextStufe);
     const nextStufe = plan.mode === 'skill' && plan.stufe < 3 && suggest ? ((plan.stufe + 1) as Stufe) : null;
-    const events: GrowthEvent[] = outcomes.current.flatMap(({ outcome }) => outcome?.growth ?? []);
-    const titleOf = (id: string) => skillMap.get(id)?.title ?? id;
-    const notes: SummaryNote[] = roundNotes(s.finished, events).map((n, i) => ({ key: `${n.kind}-${i}`, text: noteText(n, titleOf, st.settings.subtractionMethod), big: isBigNote(n) }));
-    const badgeList = [...badges.values()];
+    const { notes, badges: badgeList } = improvementsSoFar(s.finished, roundBadges);
     setSummary({ solved: sum.solved, answered: sum.answered, mastery: [...seen.values()], notes, badges: badgeList, nextStufe });
     setView('summary');
     announce(summaryAnnouncement(sum.solved, sum.answered, notes.map((n) => n.text), badgeList));
@@ -558,8 +571,13 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
   };
 
   const goodbye = () => {
+    // Leaving at the break suggestion skips the summary: show what improved so far here (after practice, so it is
+    // no pop-up during the round). After the summary ("Fertig für heute") it is not repeated.
+    const after = view === 'break' ? improvementsSoFar(sessionRef.current.finished) : null;
+    const shown = after && (after.notes.length > 0 || after.badges.length > 0) ? after : null;
+    setFarewell(shown);
     setView('goodbye');
-    announce(GOODBYE);
+    announce(shown ? afterPracticeAnnouncement(GOODBYE, shown.notes.length, shown.badges) : GOODBYE);
     pendingFocus.current = 'goodbye';
   };
 
@@ -693,6 +711,12 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
           <h2 id="pr-goodbye-h" tabIndex={-1} ref={goodbyeRef}>
             {GOODBYE}
           </h2>
+          {farewell && (
+            <>
+              <ImprovedNotes notes={farewell.notes} />
+              <NewBadges badges={farewell.badges} />
+            </>
+          )}
           <button type="button" className="btn btn--primary btn--lg" onClick={onExit}>
             Zur Übersicht
           </button>

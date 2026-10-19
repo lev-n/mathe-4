@@ -69,25 +69,25 @@ function GrowthList({ meta, mod, state }: { meta: TopicMeta; mod: TopicModule; s
     })
     .filter((x): x is { skill: (typeof mod.skills)[number]; lines: string[] } => x !== null && x.lines.length > 0);
   if (items.length === 0) return null;
-  const id = `growth-${meta.id}`;
   return (
-    <section className="progress-growth" aria-labelledby={id}>
-      <h3 id={id} className="progress-growth__title">
+    <div className="progress-growth">
+      <h3 className="progress-growth__title">
         {GROWTH_VIEW_HEADING}
+        <span className="visually-hidden">: {meta.title}</span>
       </h3>
       <ul className="progress-growth__list">
         {items.map(({ skill, lines }) => (
           <li key={skill.id} className="progress-growth__skill">
             <span className="progress-growth__name">{skill.title}</span>
             <ul className="progress-growth__lines">
-              {lines.map((line) => (
-                <li key={line}>{line}</li>
+              {lines.map((line, i) => (
+                <li key={i}>{line}</li>
               ))}
             </ul>
           </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
 }
 

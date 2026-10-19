@@ -58,7 +58,7 @@ export const MAX_TAGS_PER_ANSWER = 12;
 export const MAX_BUGS_PER_ITEM = 2;
 /** Notes in the round summary ("Das hast du verbessert") … */
 export const MAX_ROUND_NOTES = 4;
-/** … and in-item acknowledgements of kinds 1–2 per round (effort line after a 2nd try, twin line). */
+/** … and in-item effort lines after a 2nd try per round (twin lines are limited by MAX_TWINS already). */
 export const SMALL_ACKS_PER_ROUND = 3;
 
 /** Letters, digits and the few symbols bug ids use ('rechenart-+', 'rechenart-:'). */
