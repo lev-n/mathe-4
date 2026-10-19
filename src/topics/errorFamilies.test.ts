@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../core/rng';
 import { BANNED_PHRASES } from '../core/testing';
@@ -5,6 +6,7 @@ import type { GenContext, Stufe, SubtractionMethod } from '../core/types';
 import { STUFEN } from '../core/types';
 import { normalizeTag } from '../state/growth';
 import { ERROR_FAMILIES, FALLBACK_PHRASE, bugKey, familyOf, familyPhrase, tagFor, tagsFor } from './errorFamilies';
+import * as errorPhrases from './errorPhrases';
 import { loadAllTopics } from './registry';
 
 const METHODS: SubtractionMethod[] = ['abziehen', 'ergaenzen'];
@@ -110,6 +112,13 @@ describe('errorFamilies: tagFor', () => {
       ['groessen.zeitspannen', 'kleiner-von-groesser', 'zeiteinheiten'],
       ['groessen.wechselgeld', 'kleiner-von-groesser', 'cent-ergaenzen'],
       ['kopfrechnen.verdoppeln-halbieren', 'uebertrag-vergessen', 'uebertrag'],
+      ['groessen.uhrzeit', 'andere-richtung', 'rechenrichtung'],
+      ['groessen.zeitspannen', 'nur-addiert', 'zeiteinheiten'],
+      ['groessen.laengen', 'nur-addiert', 'einheiten'],
+      ['sachaufgaben.mehrschrittig', 'zwei-seiten', 'alle-seiten'],
+      ['geometrie.umfang', 'zwei-seiten', 'randlinien'],
+      ['groessen.wechselgeld', 'euro-nicht-entbuendelt', 'euro-wechseln'],
+      ['sachaufgaben.mehrschrittig', 'euro-nicht-entbuendelt', 'euro-wechseln'],
     ];
     for (const [skillId, id, family] of cases) expect(tagFor(skillId, id), `${skillId} ${id}`).toBe(family);
   });
@@ -121,6 +130,14 @@ describe('errorFamilies: tagFor', () => {
     expect(tagFor('groessen.laengen', 'addiert')).toBe('komma');
     expect(tagFor('groessen.laengen', 'weg-addiert')).toBe('rechenart');
     expect(tagFor('sachaufgaben.mehrschrittig', 'alle-zwei-punkte')).toBe('alle-schritte');
+    // groessen.geld: forgetting the Cent in '4,35 € = □ ct' and forgetting the Cent coins in "möglichst wenige Stücke"
+    expect(tagFor('groessen.geld', 'nur-euro')).toBe('komma');
+    expect(tagFor('groessen.geld', 'cent-muenzen-vergessen')).toBe('stueckelung');
+  });
+
+  it('one misconception in a skill is one family (groessen.zeitspannen: converting time units)', () => {
+    for (const id of ['nur-addiert', 'hundert', 'durch-5', 'zehn', 'zwoelf']) expect(tagFor('groessen.zeitspannen', id), id).toBe('zeiteinheiten');
+    expect(ERROR_FAMILIES.filter((f) => Object.hasOwn(f.skills, 'groessen.zeitspannen')).map((f) => f.id)).not.toContain('einheiten');
   });
 
   it('keeps words and numbers that are part of the misconception', () => {
@@ -187,6 +204,29 @@ describe('errorFamilies: familyPhrase', () => {
     expect(sentence(tagFor('zahlen.zahlwort', 'null-fehlt')!)).toBe('Du hast die Nullen jetzt fünfmal richtig gesetzt.');
   });
 
+  it('a phrase fits every task kind of its skills', () => {
+    // zahlen.zahlenstrahl: reading a number off the line (striche-gezaehlt) and placing the arrow (lang-kurz-vertauscht)
+    for (const id of ['striche-gezaehlt', 'lang-kurz-vertauscht']) {
+      expect(sentence(tagFor('zahlen.zahlenstrahl', id)!), id).toBe('Du hast den Zahlenstrahl jetzt fünfmal genau genutzt.');
+    }
+    // a fence around a bed (metres) is no figure on the grid
+    expect(sentence(tagFor('sachaufgaben.mehrschrittig', 'zwei-seiten')!)).toBe('Du hast alle vier Seiten jetzt fünfmal zusammengerechnet.');
+    expect(sentence(tagFor('geometrie.umfang', 'zwei-seiten')!)).toBe('Du hast alle Randlinien jetzt fünfmal mitgezählt.');
+    // daten.chancen: "gleich wahrscheinlich" (the difference) and "wahrscheinlicher" (the difference and one more)
+    for (const id of ['eine-zu-viel', 'nur-gleich', 'anzahl-andere', 'alle-zusammen']) {
+      expect(sentence(tagFor('daten.chancen', id)!), id).toBe('Du hast den Unterschied zwischen den Farben jetzt fünfmal genau bedacht.');
+    }
+    // change and missing money are worked out by Ergänzen: no "Entbündeln", whatever the written-subtraction method
+    for (const skillId of ['groessen.wechselgeld', 'sachaufgaben.mehrschrittig']) {
+      for (const m of METHODS) {
+        expect(sentence(tagFor(skillId, 'euro-nicht-entbuendelt')!, m), `${skillId} ${m}`).toBe('Du hast den angebrochenen Euro jetzt fünfmal richtig mitgerechnet.');
+      }
+    }
+    expect(sentence(tagFor('kopfrechnen.stufenzahlen', 'entbuendeln-vergessen')!)).toBe('Du hast das Entbündeln jetzt fünfmal richtig gemacht.');
+    // the clock runs fast or slow: subtract or add
+    expect(sentence(tagFor('groessen.uhrzeit', 'andere-richtung')!)).toBe('Du hast die Rechenrichtung jetzt fünfmal richtig gewählt.');
+  });
+
   it('unknown tags (also raw bug ids and prototype names) get the fallback phrase', () => {
     expect(FALLBACK_PHRASE).toEqual({ object: 'die knifflige Stelle in diesen Aufgaben', participle: 'richtig gelöst' });
     for (const tag of ['one-more', 'add.no-carry', '', 'constructor', '__proto__', 'toString']) {
@@ -219,13 +259,41 @@ describe('errorFamilies: familyPhrase', () => {
   });
 });
 
+describe('errorPhrases: the phrases of the families', () => {
+  it('every family has a phrase in errorPhrases.ts and every phrase a family; errorFamilies.ts takes it from there', () => {
+    const phraseIds = Object.keys(errorPhrases.FAMILY_PHRASES);
+    expect([...familyIds].filter((id) => !phraseIds.includes(id))).toEqual([]);
+    expect(phraseIds.filter((id) => !familyIds.has(id))).toEqual([]);
+    for (const f of ERROR_FAMILIES) {
+      // the same objects, not copies
+      expect(f.phrase, f.id).toBe(errorPhrases.familyPhrase(f.id, 'abziehen'));
+      expect(f.ergaenzen ?? f.phrase, f.id).toBe(errorPhrases.familyPhrase(f.id, 'ergaenzen'));
+    }
+  });
+
+  it('errorFamilies.ts re-exports the phrase lookup', () => {
+    expect(familyPhrase).toBe(errorPhrases.familyPhrase);
+    expect(FALLBACK_PHRASE).toBe(errorPhrases.FALLBACK_PHRASE);
+  });
+
+  it('errorPhrases.ts imports types only (the progress view needs it in the initial chunk)', () => {
+    const lines = readFileSync(new URL('./errorPhrases.ts', import.meta.url), 'utf8').split('\n');
+    const imports = lines.filter((l) => /^\s*import\b/.test(l) || /^\s*export\b.*\bfrom\s/.test(l));
+    expect(imports.length).toBeGreaterThan(0);
+    for (const line of imports) expect(line).toMatch(/^import type /);
+  });
+});
+
 describe('errorFamilies: generator sweep', () => {
-  const SEEDS = 40;
+  // 400 seeds reach every (skill, bug key) pair of the table. The rarest ones first show at seed 201
+  // (schriftlich.addition 'sub.zero-minus-n') and seed 322 (schriftlich.fehlerdetektiv 'div.digitwise').
+  const SEEDS = 400;
   const ctxs: GenContext[] = METHODS.map((subtractionMethod) => ({ subtractionMethod, nrwExtras: true, today: '2026-10-19' }));
 
-  it(`every Bug id of every skill (Stufe 1–3, both methods, NRW extras, ${SEEDS} seeds) has a family of that skill`, async () => {
+  it(`every Bug id of every skill (Stufe 1–3, both methods, NRW extras, ${SEEDS} seeds) has a family of that skill, and every table entry is emitted`, async () => {
     const mods = await loadAllTopics();
     const unmapped = new Map<string, number>();
+    const emitted = new Set<string>();
     let exercises = 0;
     let withBugs = 0;
     for (const mod of mods) {
@@ -238,6 +306,7 @@ describe('errorFamilies: generator sweep', () => {
               const ids = (ex.bugs ?? []).map((b) => b.id);
               if (ids.length > 0) withBugs++;
               for (const id of ids) {
+                emitted.add(`${skill.id}|${bugKey(id)}`);
                 const family = familyOf(skill.id, id);
                 const tag = tagFor(skill.id, id);
                 if (!family || tag !== family.id || !Object.hasOwn(family.skills, skill.id)) {
@@ -245,15 +314,20 @@ describe('errorFamilies: generator sweep', () => {
                   unmapped.set(k, (unmapped.get(k) ?? 0) + 1);
                 }
               }
-              for (const tag of tagsFor(skill.id, ids)) expect(familyIds.has(tag), `${skill.id} ${tag}`).toBe(true);
+              for (const tag of tagsFor(skill.id, ids)) {
+                if (!familyIds.has(tag)) unmapped.set(`${skill.id} tagsFor → ${tag}`, 1);
+              }
             }
           }
         }
       }
     }
     expect([...unmapped.keys()]).toEqual([]);
+    // the other way round: a table entry that no generator emits is a dead key (remove it, or fix the generator)
+    const table = ERROR_FAMILIES.flatMap((f) => Object.entries(f.skills).flatMap(([skillId, keys]) => keys.map((key) => `${skillId}|${key}`)));
+    expect(table.filter((k) => !emitted.has(k))).toEqual([]);
     expect(mods.flatMap((m) => m.skills).length).toBeGreaterThan(50);
-    expect(exercises).toBeGreaterThan(10_000);
+    expect(exercises).toBeGreaterThan(100_000);
     expect(withBugs).toBeGreaterThan(exercises / 2);
-  }, 30_000);
+  }, 60_000);
 });

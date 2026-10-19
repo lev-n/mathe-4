@@ -227,7 +227,8 @@ function fewest(skill: SkillDef, stufe: Stufe, rng: Rng): Exercise {
   const bugs = numberBugs(
     [
       { id: 'sorten', match: distinct, hint: 'Manche Scheine oder Münzen brauchst du mehrmals. Zähle jedes Stück.' },
-      cents % 100 > 0 && { id: 'nur-euro', match: euroPieces, hint: 'Vergiss die Cent-Münzen nicht.' },
+      // not 'nur-euro': that id is the conversion mistake '4,35 € = 400 ct' (another misconception, src/topics/errorFamilies.ts)
+      cents % 100 > 0 && { id: 'cent-muenzen-vergessen', match: euroPieces, hint: 'Vergiss die Cent-Münzen nicht.' },
       { id: 'mehr', match: n + 1, hint: 'Geht es noch mit weniger Stücken? Nimm immer den größten Schein oder die größte Münze, die noch passt.' },
     ],
     n,

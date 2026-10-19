@@ -1,5 +1,6 @@
 /**
- * Misconception families of the error library (docs/research.md M16, improvement kind 3 "Fehler überwunden").
+ * Misconception families of the error library (docs/research.md M16, improvement kind 3, badge
+ * "Stolperstein überwunden").
  *
  * Raw Bug ids are not stable misconception tags: the bug builders dedupe by value, so one misconception surfaces
  * under sibling ids (add.no-carry / add.no-carry-cut / add.last-carry); index ids split one misconception
@@ -10,23 +11,23 @@
  * Family ids are stored in the consent-gated progress (growth.errors[skillId][familyId] in 'mathe4.v1'): never rename
  * or reuse one. They are lower-case slugs that src/state/growth.ts normalizeTag() leaves unchanged (no '-<digits>'
  * segment, no '-<capital letter>' ending). Bug ids themselves are internal and may change, as long as the table
- * below follows (the generator sweep in errorFamilies.test.ts fails for any Bug id without a family).
+ * below follows. The phrase of each family ("Du hast <object> jetzt fünfmal <participle>.") lives in
+ * src/topics/errorPhrases.ts, keyed by the family id.
  *
- * Phrase: "Du hast <object> jetzt fünfmal <participle>." It names what the child did right (du-form, no traits, no
- * speed, no superlatives, no "falsch"). Built from the generator sweep of all skills (Stufe 1–3, both subtraction
- * methods, NRW extras on); every (skill, bug id) belongs to exactly one family.
+ * What the tests check (errorFamilies.test.ts): each (skill, bug key) of the table belongs to one family, and a
+ * generator sweep (every skill, Stufe 1–3, both subtraction methods, NRW extras on, a fixed set of seeds) finds no
+ * emitted Bug id without a family of its skill and no table entry that it never emits. The sweep is a sample of
+ * the generators, not a proof: a Bug id that only rare inputs produce can still be missing here, and then tagFor
+ * falls back to the id itself (with FALLBACK_PHRASE in the texts).
  */
-import type { SubtractionMethod } from '../core/types';
+import { FAMILY_PHRASES, type FamilyId, type FamilyPhrase } from './errorPhrases';
 
-/** "Du hast <object> jetzt fünfmal <participle>." */
-export interface FamilyPhrase {
-  object: string;
-  participle: string;
-}
+export { FALLBACK_PHRASE, familyPhrase, type FamilyPhrase, type FamilyId } from './errorPhrases';
 
 export interface ErrorFamily {
   /** Stable tag stored in the progress. */
   readonly id: string;
+  /** From src/topics/errorPhrases.ts. */
   readonly phrase: FamilyPhrase;
   /** Written subtraction with the Ergänzen method (the hints say "Erweitern" and "gemerkte 1"). */
   readonly ergaenzen?: FamilyPhrase;
@@ -34,11 +35,12 @@ export interface ErrorFamily {
   readonly skills: Readonly<Record<string, readonly string[]>>;
 }
 
-function fam(id: string, object: string, participle: string, skills: Record<string, string>, ergaenzen?: FamilyPhrase): ErrorFamily {
+/** A family: its phrase comes from errorPhrases.ts; `skills` maps skillId → space-separated Bug keys. */
+function fam(id: FamilyId, skills: Record<string, string>): ErrorFamily {
   const parsed: Record<string, readonly string[]> = {};
   for (const [skillId, keys] of Object.entries(skills)) parsed[skillId] = keys.split(/\s+/).filter(Boolean);
-  const family: ErrorFamily = { id, phrase: { object, participle }, skills: parsed };
-  return ergaenzen ? { ...family, ergaenzen } : family;
+  const { phrase, ergaenzen } = FAMILY_PHRASES[id];
+  return ergaenzen ? { id, phrase, ergaenzen, skills: parsed } : { id, phrase, skills: parsed };
 }
 
 const ADD_CARRY = 'add.no-carry add.no-carry-cut add.carry-twice add.carry-too-small add.carry-swapped add.last-carry';
@@ -47,7 +49,7 @@ const SUB_BORROW = 'sub.smaller-from-larger sub.no-reduce sub.zero-minus-n sub.z
 
 export const ERROR_FAMILIES: readonly ErrorFamily[] = [
   // ─── Schriftlich rechnen ───────────────────────────────────────────────────
-  fam('uebertrag', 'den Übertrag', 'richtig beachtet', {
+  fam('uebertrag', {
     'schriftlich.addition': ADD_CARRY,
     'schriftlich.subtraktion': 'add.no-carry add.no-carry-cut add.carry-twice add.carry-swapped add.last-carry', // Probe with plus
     'schriftlich.fehlerdetektiv': `${ADD_CARRY} ${MUL_CARRY}`,
@@ -58,60 +60,52 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'kopfrechnen.stufenzahlen': 'uebertrag-vergessen', // plus tasks only
   }),
   // Written subtraction: the hints follow the child's method (Entbündeln, or Erweitern with the gemerkte 1).
-  fam(
-    'entbuendeln',
-    'das Entbündeln',
-    'richtig gemacht',
-    {
-      'schriftlich.addition': SUB_BORROW, // Umkehraufgabe with minus
-      'schriftlich.subtraktion': SUB_BORROW,
-      'schriftlich.fehlerdetektiv': SUB_BORROW,
-      'schriftlich.ziffernraetsel': 'zr.borrow', // minus puzzles
-    },
-    { object: 'das Erweitern mit der gemerkten 1', participle: 'richtig gemacht' },
-  ),
-  // Mental and money subtraction: always Entbündeln (the subtraction method is about written subtraction).
-  fam('entbuendeln-kopf', 'das Entbündeln', 'richtig gemacht', {
-    'kopfrechnen.stufenzahlen': 'kleiner-minus-groesser entbuendeln-vergessen',
-    'groessen.wechselgeld': 'euro-nicht-entbuendelt',
-    'sachaufgaben.mehrschrittig': 'euro-nicht-entbuendelt',
+  fam('entbuendeln', {
+    'schriftlich.addition': SUB_BORROW, // Umkehraufgabe with minus
+    'schriftlich.subtraktion': SUB_BORROW,
+    'schriftlich.fehlerdetektiv': SUB_BORROW,
+    'schriftlich.ziffernraetsel': 'zr.borrow', // minus puzzles
   }),
-  fam('stellengerecht', 'die Zahlen', 'stellengerecht untereinandergeschrieben', {
+  // Mental subtraction: always Entbündeln (the subtraction method is about written subtraction).
+  fam('entbuendeln-kopf', {
+    'kopfrechnen.stufenzahlen': 'kleiner-minus-groesser entbuendeln-vergessen',
+  }),
+  fam('stellengerecht', {
     'schriftlich.addition': 'add.misaligned',
     'schriftlich.subtraktion': 'add.misaligned',
     'schriftlich.fehlerdetektiv': 'add.misaligned',
   }),
-  fam('teilprodukte', 'alle Teilprodukte', 'an die richtige Stelle geschrieben', {
+  fam('teilprodukte', {
     'schriftlich.multiplikation': 'mul.ones-only mul.unshifted mul.zero-skipped',
     'schriftlich.mal-dreistellig': 'mul.ones-only mul.unshifted mul.zero-skipped',
     'schriftlich.fehlerdetektiv': 'mul.ones-only mul.unshifted',
   }),
-  fam('null-im-ergebnis', 'die Null im Ergebnis', 'mitgeschrieben', {
+  fam('null-im-ergebnis', {
     'schriftlich.division': 'div.missing-zero div.missing-end-zero',
     'schriftlich.fehlerdetektiv': 'div.missing-zero div.missing-end-zero',
   }),
-  fam('rest', 'den Rest', 'richtig beachtet', {
+  fam('rest', {
     'schriftlich.division': 'div.rest-too-big div.rest-vergessen',
     'schriftlich.fehlerdetektiv': 'div.rest-too-big div.rest-vergessen',
     'schriftlich.ueberschlag-probe': 'probe.rest-abgezogen probe.rest-vergessen probe.rest-zuerst',
   }),
-  fam('rest-mitnehmen', 'den Rest', 'zur nächsten Stelle mitgenommen', {
+  fam('rest-mitnehmen', {
     'schriftlich.division': 'div.digitwise',
     'schriftlich.fehlerdetektiv': 'div.digitwise',
     'kopfrechnen.verdoppeln-halbieren': 'rest-vergessen',
   }),
-  fam('teilen-anfang', 'den Anfang beim Teilen', 'richtig gewählt', {
+  fam('teilen-anfang', {
     'schriftlich.division': 'div.drop-first',
     'schriftlich.fehlerdetektiv': 'div.drop-first',
   }),
-  fam('rest-deuten', 'den Rest', 'passend zur Geschichte beachtet', {
+  fam('rest-deuten', {
     'schriftlich.division': 'div.rest-ignored div.rest-instead div.divisor',
     'sachaufgaben.rest': 'abgerundet aufgerundet rest quotient',
     'zahlen.buendeln': 'aufgerundet',
     'geometrie.ecken-kanten-flaechen': 'aufgerundet',
     'daten.fahrplaene': 'aufgerundet',
   }),
-  fam('rechenart', 'die passende Rechenart', 'gewählt', {
+  fam('rechenart', {
     'schriftlich.addition': 'sub.added',
     'schriftlich.subtraktion': 'sub.added sub.inverse-minus',
     'schriftlich.fehlerdetektiv': 'sub.added',
@@ -129,32 +123,33 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'sachaufgaben.mehrschrittig': 'addiert alles-addiert',
     'sachaufgaben.rest': 'mal',
   }),
-  fam('rechenrichtung', 'die Rechenrichtung', 'richtig gewählt', {
+  fam('rechenrichtung', {
     'groessen.zeitspannen': 'rueckwaerts vorwaerts',
+    'groessen.uhrzeit': 'andere-richtung', // the clock runs fast or slow: subtract or add
     'kopfrechnen.verdoppeln-halbieren': 'vorwaerts',
   }),
-  fam('ziffern-legen', 'die Ziffern', 'an passende Stellen gesetzt', {
+  fam('ziffern-legen', {
     'zahlen.vergleichen': 'groesste-gebildet kleinste-gebildet null-vorne',
     'schriftlich.addition': 'add.one-big-number',
     'schriftlich.subtraktion': 'sub.small-desc',
   }),
-  fam('hilfsaufgabe', 'die Hilfsaufgabe', 'richtig genutzt', {
+  fam('hilfsaufgabe', {
     'schriftlich.rechenweg': 'hs.minus-s hs.plus-instead hs.second-part hs.second-part-sum',
     'schriftlich.multiplikation': 'mul.minus-factor mul.plus-factor mul.plus-one mul.double-plus-a mul.wrong-direction',
     'schriftlich.mal-dreistellig': 'mul.minus-factor mul.plus-factor mul.plus-one mul.wrong-direction',
     'kopfrechnen.ableiten': 'einer-vergessen falscher-faktor nachbar nicht-malgenommen nur-eins plus-zwei zehner-als-eins',
   }),
-  fam('fehler-finden', 'den Fehler in der Rechnung', 'gefunden und verbessert', {
+  fam('fehler-finden', {
     'schriftlich.fehlerdetektiv': 'fd.unchanged',
   }),
 
   // ─── Zahlen, Runden, Stellenwerte ──────────────────────────────────────────
-  fam('runden', 'die Rundungsregel', 'richtig angewendet', {
+  fam('runden', {
     'zahlen.runden': 'abgerundet abgeschnitten aufgerundet falsche-stelle-gross falsche-stelle-klein mitte nicht-genullt unveraendert ziel zu-gross',
     'schriftlich.ueberschlag-probe': 'ue.cut ue.exact',
     'sachaufgaben.ueberschlag': 'abgeschnitten genau',
   }),
-  fam('nullen', 'die Nullen', 'richtig gesetzt', {
+  fam('nullen', {
     'zahlen.zahlwort': 'null-fehlt null-fehlt-innen tausend-als-000 zu-viele-nullen', // zeros after "tausend", no comma
     'zahlen.stellenwert': 'null-vergessen',
     'zahlen.buendeln': 'eine-stelle-zu-viel eine-stelle-zu-wenig',
@@ -169,42 +164,42 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'groessen.hohlmasse': 'null-fehlt',
     'groessen.tonnen': 'null-fehlt',
   }),
-  fam('stellenwert', 'die Stellenwerte', 'richtig beachtet', {
+  fam('stellenwert', {
     'zahlen.stellenwert':
       'addiert falsche-spalte-links falsche-spalte-rechts nicht-sechsstellig nur-altes nur-dazu nur-neues nur-weg nur-ziffer regel-vergessen ' +
       'reihenfolge spalten-gezaehlt stelle-links stelle-rechts stelle-zu-gross stelle-zu-klein stellen-gezaehlt unveraendert zu-weit-links',
     'zahlen.buendeln': 'abgeschrieben falsche-stelle nur-ziffer vertauscht',
   }),
-  fam('zahlendreher', 'Zehner und Einer', 'in der richtigen Reihenfolge geschrieben', {
+  fam('zahlendreher', {
     'zahlen.zahlwort': 'dreher-rest dreher-tausender',
   }),
-  fam('nachbarzahlen', 'die Nachbarzahlen', 'richtig bestimmt', {
+  fam('nachbarzahlen', {
     'zahlen.nachbarzahlen': 'gegeben stelle-zu-gross stelle-zu-klein uebergang verwechselt vorgaenger-nachfolger zahl-selbst',
   }),
-  fam('abstand', 'die Abstände zwischen den Zahlen', 'richtig genutzt', {
+  fam('abstand', {
     'zahlen.nachbarzahlen': 'abstand gerundet halber-abstand mit-raendern',
     'zahlen.zahlenstrahl': 'abstand halber-abstand',
   }),
-  fam('zahlenstrahl', 'den Zahlenstrahl', 'genau abgelesen', {
+  fam('zahlenstrahl', {
     'zahlen.zahlenstrahl': 'einer-mehr einer-weniger lang-kurz-vertauscht schritt-zu-gross schritt-zu-klein striche-gezaehlt',
   }),
-  fam('binaer', 'die Punkte auf den Karten', 'richtig zusammengezählt', {
+  fam('binaer', {
     'zahlen.binaer': 'eins-dazu karten-gezaehlt naechste-karte nur-groesste umgedreht ziffern-gelesen',
   }),
-  fam('muster', 'das Muster', 'richtig fortgesetzt', {
+  fam('muster', {
     'zahlen.zahlenfolgen': 'gleicher-schritt richtung schritt-zehnmal schritt-zehntel',
     'kopfrechnen.paeckchen': 'gleicher-schritt nicht-veraendert',
   }),
 
   // ─── Größen ────────────────────────────────────────────────────────────────
-  fam('komma', 'die Stellen vor und nach dem Komma', 'richtig beachtet', {
-    'groessen.geld': 'addiert zehner-cent null-hinten nur-cent nur-euro stellen',
+  fam('komma', {
+    'groessen.geld': 'addiert zehner-cent null-hinten nur-cent nur-euro',
     'groessen.laengen': 'addiert komma-weg',
     'groessen.gewichte': 'komma-weg',
     'groessen.hohlmasse': 'komma-weg',
     'groessen.tonnen': 'komma-weg',
   }),
-  fam('umrechnungszahl', 'die Umrechnungszahl', 'richtig gewählt', {
+  fam('umrechnungszahl', {
     'groessen.geld': 'faktor',
     'groessen.laengen': 'faktor cm-statt-mm',
     'groessen.gewichte': 'faktor durch-10 viertel-4',
@@ -212,63 +207,66 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'groessen.tonnen': 'faktor durch-10',
     'groessen.schaetzen': 'faktor',
     'sachaufgaben.rest': 'meter',
-    'sachaufgaben.mehrschrittig': 'faktor',
   }),
-  fam('einheiten', 'die Einheiten', 'richtig beachtet', {
+  fam('einheiten', {
     'groessen.geld': 'abgeschrieben cent-als-euro',
     'groessen.laengen': 'abgeschrieben nur-addiert vertauscht',
     'groessen.gewichte': 'abgeschrieben nur-addiert vertauscht',
     'groessen.hohlmasse': 'abgeschrieben nur-addiert vertauscht',
     'groessen.tonnen': 'abgeschrieben nur-addiert vertauscht',
-    'groessen.zeitspannen': 'nur-addiert',
     'groessen.vergleichen': 'nur-zahlen-verglichen',
     'sachaufgaben.menge-preis': 'cent',
   }),
-  fam('zeiteinheiten', 'die Zeiteinheiten', 'richtig beachtet', {
+  fam('zeiteinheiten', {
     'groessen.uhrzeit': 'bis-100',
-    'groessen.zeitspannen': 'durch-5 hundert kleiner-von-groesser ohne-uebertrag schultage tage zehn zehner zwoelf',
+    'groessen.zeitspannen': 'durch-5 hundert kleiner-von-groesser nur-addiert ohne-uebertrag schultage tage zehn zehner zwoelf',
     'daten.fahrplaene': 'hundert-minuten nur-minuten',
     'sachaufgaben.mehrschrittig': 'hundert',
   }),
-  fam('uhr-lesen', 'die Uhrzeit', 'richtig abgelesen', {
-    'groessen.uhrzeit': 'andere-richtung fuenf-nach-halb fuenf-vor-halb halb-verwechselt naechste-stunde ohne-12 vor-nach zeiger-vertauscht',
+  fam('uhr-lesen', {
+    'groessen.uhrzeit': 'fuenf-nach-halb fuenf-vor-halb halb-verwechselt naechste-stunde ohne-12 vor-nach zeiger-vertauscht',
   }),
-  fam('ergaenzen', 'jede Stelle', 'richtig ergänzt', {
+  fam('ergaenzen', {
     'kopfrechnen.ergaenzen': 'eins-zu-viel eins-zu-wenig jede-ziffer-zu-10',
   }),
-  fam('cent-ergaenzen', 'die Cent', 'richtig ergänzt', {
+  fam('cent-ergaenzen', {
     'groessen.wechselgeld': 'kleiner-von-groesser ziffern-zu-10',
   }),
-  fam('messen', 'die Skala', 'genau abgelesen', {
+  // Change and missing money: the Euro broken into Cent is taken off the Euro (Ergänzen, not written subtraction).
+  fam('euro-wechseln', {
+    'groessen.wechselgeld': 'euro-nicht-entbuendelt',
+    'sachaufgaben.mehrschrittig': 'euro-nicht-entbuendelt',
+  }),
+  fam('messen', {
     'groessen.laengen': 'ein-cm-daneben ende-abgelesen naechster-cm rueckwaerts striche-gezaehlt',
     'groessen.gewichte': 'strich-10g strich-zu-viel',
     'groessen.hohlmasse': 'strich-100 strich-zu-viel striche-gezaehlt',
   }),
-  fam('geld-zaehlen', 'das Geld', 'richtig zusammengezählt', {
+  fam('geld-zaehlen', {
     'groessen.geld': 'cent-vergessen stueck-gezaehlt',
   }),
-  fam('stueckelung', 'die Scheine und Münzen', 'passend ausgewählt', {
-    'groessen.geld': 'mehr sorten',
+  fam('stueckelung', {
+    'groessen.geld': 'cent-muenzen-vergessen mehr sorten', // fewest notes and coins
   }),
-  fam('vergleichsgroesse', 'deine Vergleichsgrößen', 'passend genutzt', {
+  fam('vergleichsgroesse', {
     'groessen.schaetzen': 'meter-gleich-schritt',
   }),
 
   // ─── Daten ─────────────────────────────────────────────────────────────────
-  fam('diagramm-lesen', 'das Diagramm', 'genau abgelesen', {
+  fam('diagramm-lesen', {
     'daten.saeulendiagramme': 'linien-gezaehlt nicht-groesster nicht-kleinster',
     'daten.diagramme-pruefen': 'ab-null-gezaehlt linien-gezaehlt',
   }),
-  fam('fuenferbuendel', 'die Fünferbündel', 'richtig gezählt', {
+  fam('fuenferbuendel', {
     'daten.strichlisten': 'aufgerundet buendel-als-eins buendel-als-vier vierer-buendel zehner-buendel',
     'daten.darstellungen': 'vier eins',
   }),
-  fam('bildwert', 'den Wert der Bilder', 'richtig beachtet', {
+  fam('bildwert', {
     'daten.bilddiagramme':
       'additiv-gedacht alte-anzahl bilder-gezaehlt bilder-gezaehlt-halb ganze-bilder-gezaehlt halb-als-ganz halb-vergessen halbe-vergessen ' +
       'mal-statt-geteilt nur-legende wert-statt-bilder',
   }),
-  fam('alle-werte', 'alle Zahlen', 'mitgerechnet', {
+  fam('alle-werte', {
     'daten.strichlisten': 'zeile-vergessen zahl-vergessen',
     'daten.saeulendiagramme': 'wert-vergessen nur-einer',
     'daten.bilddiagramme': 'zeile-vergessen',
@@ -278,7 +276,7 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'groessen.hohlmasse': 'ganzes-vergessen',
     'groessen.tonnen': 'ganzes-vergessen',
   }),
-  fam('anzahl', 'die Anzahl', 'richtig beachtet', {
+  fam('anzahl', {
     'daten.fahrplaene': 'alles-mal einmal je-einer menge-vergessen',
     'groessen.gewichte': 'nur-einmal',
     'groessen.hohlmasse': 'nur-ein-glas nur-ein-liter',
@@ -287,7 +285,7 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'geometrie.ecken-kanten-flaechen': 'ein-koerper je-ein-modell nur-ein-modell',
     'sachaufgaben.menge-preis': 'eine-zeile',
   }),
-  fam('frage', 'die Frage', 'genau beantwortet', {
+  fam('frage', {
     'groessen.wechselgeld': 'nur-summe rueckgeld',
     'groessen.gewichte': 'verbraucht',
     'groessen.hohlmasse': 'eingegossen',
@@ -302,23 +300,23 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'daten.saeulendiagramme': 'nur-summe',
     'sachaufgaben.menge-preis': 'gesamt einzelpreis',
   }),
-  fam('fahrplan', 'die passende Zeile und Spalte', 'gefunden', {
+  fam('fahrplan', {
     'daten.fahrplaene': 'bus-weg haltestelle uebernaechster zeile',
   }),
-  fam('moeglichkeiten', 'alle Möglichkeiten', 'systematisch gezählt', {
+  fam('moeglichkeiten', {
     'daten.kombinatorik':
       'alle-mal-alle alle-nachher alle-plaetze-drei alle-vorher doppelt-gezaehlt dritte-vergessen gesamtzahl halb-addiert ' +
       'minus-statt-geteilt mit-wiederholung nur-ein-kind nur-eine nur-erster-platz plus-statt-mal',
   }),
-  fam('sicher-ziehen', 'auch den Fall mit Pech', 'bedacht', {
+  fam('sicher-ziehen', {
     'daten.zufall': 'alle anzahl-farben eine plus-eins-vergessen zielfarbe zwei',
   }),
-  fam('chancen', 'den Unterschied zwischen den Farben', 'richtig ausgeglichen', {
+  fam('chancen', {
     'daten.chancen': 'alle-zusammen anzahl-andere eine-zu-viel nur-gleich',
   }),
 
   // ─── Sachaufgaben ──────────────────────────────────────────────────────────
-  fam('alle-schritte', 'an alle Rechenschritte', 'gedacht', {
+  fam('alle-schritte', {
     'sachaufgaben.mehrschrittig':
       'alle alle-zwei-punkte alle-erwachsenenpreis anzahl-vergessen beides-mal bus-nicht-geteilt ein-brett ein-heft einmal-rezept essen-vergessen ' +
       'ganze-linie je-eins kinder-vergessen koerbe nur-bus nur-einkauf nur-erstes nur-hefte tor-vergessen verbrauch verkauft zweite-ware-vergessen',
@@ -326,74 +324,74 @@ export const ERROR_FAMILIES: readonly ErrorFamily[] = [
     'kopfrechnen.mal-durch-zehn': 'nur-ein-schritt',
     'daten.strichlisten': 'nicht-korrigiert',
   }),
-  fam('nicht-loesbar', 'nicht lösbare Aufgaben', 'erkannt', {
+  fam('nicht-loesbar', {
     'sachaufgaben.angaben': 'fehlt summe produkt differenz',
   }),
-  fam('ueberfluessig', 'die überflüssigen Angaben', 'weggelassen', {
+  fam('ueberfluessig', {
     'sachaufgaben.angaben': 'ueberfluessig',
   }),
-  fam('zuordnung', 'die Mengen und Preise', 'richtig zugeordnet', {
+  fam('zuordnung', {
     'sachaufgaben.menge-preis': 'addiert additiv mal-personen preis-mal-anzahl',
   }),
-  fam('situation', 'die Situation', 'genau durchdacht', {
+  fam('situation', {
     'sachaufgaben.menge-preis': 'geteilt mal proportional',
+  }),
+  // A fence around a bed (lengths in m); 'randlinien' is the perimeter of a figure on the grid.
+  fam('alle-seiten', {
+    'sachaufgaben.mehrschrittig': 'zwei-seiten',
   }),
 
   // ─── Geometrie ─────────────────────────────────────────────────────────────
-  fam('ekf', 'Ecken, Kanten und Flächen', 'richtig unterschieden', {
+  fam('ekf', {
     'geometrie.ecken-kanten-flaechen':
       'verwechselt-ecken verwechselt-kanten verwechselt-flaechen ecken-kanten-vertauscht vertauscht ecken-gezaehlt ecken-statt-kanten ' +
       'kanten-an-ecke kanten-an-spitze flaechen-an-kante ecken-einer-flaeche flaechen-null gebogene-flaeche-vergessen kanten-null umriss-als-kante',
   }),
-  fam('versteckt', 'die versteckten Teile', 'mitgezählt', {
+  fam('versteckt', {
     'geometrie.ecken-kanten-flaechen': 'nur-sichtbare nur-sichtbare-ecken nur-sichtbare-kanten nur-sichtbare-flaechen',
   }),
-  fam('wuerfel-zaehlen', 'alle Würfel', 'mitgezählt', {
+  fam('wuerfel-zaehlen', {
     'geometrie.wuerfelgebaeude': 'felder nur-oben nur-sichtbare tuerme',
   }),
-  fam('wuerfelnetz', 'die gegenüberliegenden Flächen', 'richtig gefunden', {
+  fam('wuerfelnetz', {
     'geometrie.wuerfelnetze': 'gleiche-zahl nachbar',
   }),
-  fam('figuren', 'die Eigenschaften der Figuren', 'genau geprüft', {
+  fam('figuren', {
     'geometrie.figuren': 'rw-rechteck rw-quadrat rw-parallelogramm rw-zwei-rechtecke seiten-quadrat parallel-rechteck ecken-sechseck-dreieck dreieck-rechte-winkel',
   }),
-  fam('quadrate', 'auch die großen Quadrate', 'mitgezählt', {
+  fam('quadrate', {
     'geometrie.figuren': 'nur-kleine ohne-mittlere plus-eins',
   }),
-  fam('symmetrie', 'die Symmetrieachsen', 'richtig gefunden', {
+  fam('symmetrie', {
     'geometrie.symmetrie': 'achsen',
   }),
-  fam('flaeche-umfang', 'Flächeninhalt und Umfang', 'richtig unterschieden', {
+  fam('flaeche-umfang', {
     'geometrie.flaeche': 'umfang',
     'geometrie.umfang': 'flaeche',
     'sachaufgaben.mehrschrittig': 'flaeche',
   }),
-  fam('kaestchen', 'alle Kästchen', 'richtig gezählt', {
+  fam('kaestchen', {
     'geometrie.flaeche': 'breite-plus-hoehe halbe-als-ganze halbe-vergessen luecke-als-eins nicht-abgezogen randkaestchen rechteck-drumherum',
   }),
-  fam('randlinien', 'alle Randlinien', 'mitgezählt', {
+  fam('randlinien', {
     'geometrie.umfang': 'randkaestchen rechteck-drumherum zwei-seiten',
-    'sachaufgaben.mehrschrittig': 'zwei-seiten',
   }),
 
   // ─── Kopfrechnen ───────────────────────────────────────────────────────────
-  fam('einmaleins', 'die Einmaleins-Aufgaben', 'genau ausgerechnet', {
+  fam('einmaleins', {
     'kopfrechnen.einmaleins': 'eine-reihe-mehr eine-reihe-weniger eins-mehr eins-weniger nachbar-mehr nachbar-weniger',
   }),
-  fam('tauschaufgabe', 'Tausch- und Umkehraufgaben', 'richtig genutzt', {
+  fam('tauschaufgabe', {
     'kopfrechnen.einmaleins': 'ohne-tausch vertauscht',
   }),
-  fam('ausgleichen', 'das Ausgleichen', 'richtig gemacht', {
+  fam('ausgleichen', {
     'kopfrechnen.vorteilhaft': 'gegensinnig gleichsinnig nicht-ausgeglichen verkehrt-ausgeglichen',
     'kopfrechnen.paeckchen': 'gleichsinnig plus-ausgleich',
   }),
-  fam('teiler', 'die Teiler und Vielfachen', 'richtig bestimmt', {
+  fam('teiler', {
     'kopfrechnen.teiler-vielfache': 'alle-teiler einer-zu-viel eins-vergessen falsche-reihe grenze ohne-1-und-zahl plus-eins produkt',
   }),
 ];
-
-/** Phrase for tags without a family (a new Bug id that has not been added to the table yet). */
-export const FALLBACK_PHRASE: FamilyPhrase = { object: 'die knifflige Stelle in diesen Aufgaben', participle: 'richtig gelöst' };
 
 // ─── Lookup ───────────────────────────────────────────────────────────────────
 
@@ -467,11 +465,4 @@ export function tagsFor(skillId: string, bugIds: readonly string[] | undefined):
     if (tag !== null && !out.includes(tag)) out.push(tag);
   }
   return out;
-}
-
-/** "Du hast <object> jetzt fünfmal <participle>." for a stored tag (a family id); unknown tags get FALLBACK_PHRASE. */
-export function familyPhrase(tag: string, method: SubtractionMethod = 'abziehen'): FamilyPhrase {
-  const f = BY_ID.get(tag);
-  if (!f) return FALLBACK_PHRASE;
-  return method === 'ergaenzen' && f.ergaenzen ? f.ergaenzen : f.phrase;
 }

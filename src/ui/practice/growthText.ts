@@ -9,14 +9,14 @@ import type { Stufe, SubtractionMethod } from '../../core/types';
 import { GROWTH_WINDOW, OVERCOME_RUN, type RoundNote, type SkillGrowthView } from '../../state/growth';
 import { factFactors } from '../../state/facts';
 import type { BadgeDef, MasteryState } from '../../state/types';
-import { familyPhrase, type FamilyPhrase } from '../../topics/errorFamilies';
+import { familyPhrase, type FamilyPhrase } from '../../topics/errorPhrases';
 import { MASTERY_LABEL, stufeLabel } from '../app/labels';
 import { summaryText } from './phrases';
 
 export const IMPROVED_HEADING = 'Das hast du verbessert';
 export const GROWTH_VIEW_HEADING = 'So hast du dich verbessert';
 
-/** "Du hast <object> jetzt fünfmal <participle>." (src/topics/errorFamilies.ts) */
+/** "Du hast <object> jetzt fünfmal <participle>." (src/topics/errorPhrases.ts) */
 export type ErrorPhrase = FamilyPhrase;
 
 /**
