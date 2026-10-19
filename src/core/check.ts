@@ -6,25 +6,32 @@ const EPS = 1e-9;
 const same = (a: number, b: number) => Math.abs(a - b) < EPS;
 const cellKey = (c: Cell) => `${c[0]},${c[1]}`;
 
-function bugFor(bugs: Bug[] | undefined, value: number | Record<string, number>): string | undefined {
+function bugFor(bugs: Bug[] | undefined, value: number | Record<string, number>): Bug | undefined {
   if (!bugs) return undefined;
   for (const bug of bugs) {
     if (bug.remainder !== undefined || Array.isArray(bug.match)) continue;
-    if (typeof bug.match === 'number' && typeof value === 'number' && same(bug.match, value)) return bug.hint;
+    if (typeof bug.match === 'number' && typeof value === 'number' && same(bug.match, value)) return bug;
     if (typeof bug.match === 'object' && typeof value === 'object') {
       const m = bug.match;
       const keys = Object.keys(m);
-      if (keys.length > 0 && keys.every((k) => k in value && same(m[k], value[k]))) return bug.hint;
+      if (keys.length > 0 && keys.every((k) => k in value && same(m[k], value[k]))) return bug;
     }
   }
   return undefined;
 }
 
 /** Written div: a bug with `remainder` needs quotient and remainder to match; others match the quotient only. */
-function writtenDivBug(bugs: Bug[] | undefined, quotient: number, remainder: number | null): string | undefined {
+function writtenDivBug(bugs: Bug[] | undefined, quotient: number, remainder: number | null): Bug | undefined {
   if (!bugs) return undefined;
   const withRest = bugs.find((b) => b.remainder !== undefined && typeof b.match === 'number' && same(b.match, quotient) && remainder !== null && same(b.remainder, remainder));
-  return withRest?.hint ?? bugFor(bugs, quotient);
+  return withRest ?? bugFor(bugs, quotient);
+}
+
+/** A wrong result with the matched bug's hint and id (the id feeds the improvement tracking, src/state/growth.ts). */
+function wrong(bug: Bug | undefined, extra: Omit<CheckResult, 'correct' | 'bugHint' | 'bugId'> = {}): CheckResult {
+  const result: CheckResult = { correct: false, ...extra, bugHint: bug?.hint };
+  if (bug) result.bugId = bug.id;
+  return result;
 }
 
 /** Shown (not counted as an attempt) when a written task with an Überschlag is checked without one. */
@@ -36,10 +43,9 @@ export function roughlyEqual(a: number, b: number): boolean {
 }
 
 /** Order answers: a bug whose match is exactly the given index order. */
-function orderBug(bugs: Bug[] | undefined, order: readonly number[]): string | undefined {
+function orderBug(bugs: Bug[] | undefined, order: readonly number[]): Bug | undefined {
   if (!bugs) return undefined;
-  const bug = bugs.find((b) => Array.isArray(b.match) && b.match.length === order.length && b.match.every((v, i) => v === order[i]));
-  return bug?.hint;
+  return bugs.find((b) => Array.isArray(b.match) && b.match.length === order.length && b.match.every((v, i) => v === order[i]));
 }
 
 /**
@@ -61,10 +67,11 @@ export function checkAnswer(answer: Answer, response: Response, bugs?: Bug[]): C
       const parsed = parseNumber(r.text, answer.decimals ?? 0);
       if (!parsed.ok) return { correct: false, invalid: parsed.reason };
       if (answer.value === null) {
-        return { correct: false, bugHint: bugFor(bugs, parsed.value) ?? 'Prüfe, ob du wirklich alle Angaben hast, die du zum Rechnen brauchst.' };
+        const bug = bugFor(bugs, parsed.value);
+        return bug ? wrong(bug) : { correct: false, bugHint: 'Prüfe, ob du wirklich alle Angaben hast, die du zum Rechnen brauchst.' };
       }
       if (same(parsed.value, answer.value)) return { correct: true };
-      return { correct: false, bugHint: bugFor(bugs, parsed.value) };
+      return wrong(bugFor(bugs, parsed.value));
     }
     case 'choice': {
       const r = response as Extract<Response, { kind: 'choice' }>;
@@ -86,7 +93,7 @@ export function checkAnswer(answer: Answer, response: Response, bugs?: Bug[]): C
         fieldCorrect[field.id] = same(parsed.value, field.value);
       }
       const correct = Object.values(fieldCorrect).every(Boolean);
-      return correct ? { correct, fieldCorrect } : { correct, fieldCorrect, bugHint: bugFor(bugs, values) };
+      return correct ? { correct, fieldCorrect } : wrong(bugFor(bugs, values), { fieldCorrect });
     }
     case 'written': {
       const r = response as Extract<Response, { kind: 'written' }>;
@@ -130,7 +137,9 @@ export function checkAnswer(answer: Answer, response: Response, bugs?: Bug[]): C
         result.ueberschlagOk = roughlyEqual(givenUeberschlag, answer.ueberschlag);
       }
       if (!correct) {
-        result.bugHint = answer.op === 'div' ? writtenDivBug(bugs, parsed.value, givenRem) : bugFor(bugs, parsed.value);
+        const bug = answer.op === 'div' ? writtenDivBug(bugs, parsed.value, givenRem) : bugFor(bugs, parsed.value);
+        result.bugHint = bug?.hint;
+        if (bug) result.bugId = bug.id;
         // No known mistake: use the child's own Überschlag as the check (the reason it is made first).
         if (!result.bugHint && result.ueberschlagOk && givenUeberschlag !== undefined && !roughlyEqual(parsed.value, givenUeberschlag)) {
           result.bugHint = 'Dein Ergebnis passt nicht zu deinem Überschlag. Rechne noch einmal Stelle für Stelle nach.';
@@ -153,13 +162,13 @@ export function checkAnswer(answer: Answer, response: Response, bugs?: Bug[]): C
       const r = response as Extract<Response, { kind: 'numberline' }>;
       if (!Number.isFinite(r.value)) return { correct: false, invalid: 'Setze zuerst den Pfeil auf den Zahlenstrahl.' };
       if (Math.abs(r.value - answer.value) <= answer.tolerance + EPS) return { correct: true };
-      return { correct: false, bugHint: bugFor(bugs, r.value) };
+      return wrong(bugFor(bugs, r.value));
     }
     case 'order': {
       const r = response as Extract<Response, { kind: 'order' }>;
       if (r.order.length !== answer.items.length) return { correct: false, invalid: 'Tippe alle Zahlen der Reihe nach an.' };
       const correct = r.order.every((v, i) => v === answer.correct[i]);
-      return correct ? { correct } : { correct, bugHint: orderBug(bugs, r.order) };
+      return correct ? { correct } : wrong(orderBug(bugs, r.order));
     }
   }
 }

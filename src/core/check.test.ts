@@ -12,7 +12,12 @@ describe('checkAnswer: number', () => {
   });
   it('returns a targeted hint for a known bug', () => {
     const r = checkAnswer(answer, { kind: 'number', text: '345600' }, bugs);
-    expect(r).toEqual({ correct: false, bugHint: 'Schau auf die Zehnerstelle.' });
+    expect(r).toEqual({ correct: false, bugHint: 'Schau auf die Zehnerstelle.', bugId: 'abrunden' });
+  });
+  it('reports no bug id for a wrong answer that matches no bug', () => {
+    const r = checkAnswer(answer, { kind: 'number', text: '345800' }, bugs);
+    expect(r.correct).toBe(false);
+    expect(r.bugId).toBeUndefined();
   });
   it('treats unreadable input as invalid, not wrong', () => {
     const r = checkAnswer(answer, { kind: 'number', text: '345,7' });
@@ -56,7 +61,7 @@ describe('checkAnswer: choice, multi, order', () => {
   it('order bugs match an exact index order', () => {
     const a: Answer = { kind: 'order', items: ['2 m 5 cm', '250 cm', '2,15 m'], correct: [0, 2, 1], direction: 'aufsteigend' };
     const bugs: Bug[] = [{ id: 'nur-zahlen', match: [0, 2, 1].reverse(), hint: 'Achte auf die Einheiten.' }];
-    expect(checkAnswer(a, { kind: 'order', order: [1, 2, 0] }, bugs)).toEqual({ correct: false, bugHint: 'Achte auf die Einheiten.' });
+    expect(checkAnswer(a, { kind: 'order', order: [1, 2, 0] }, bugs)).toEqual({ correct: false, bugHint: 'Achte auf die Einheiten.', bugId: 'nur-zahlen' });
     expect(checkAnswer(a, { kind: 'order', order: [2, 0, 1] }, bugs)).toEqual({ correct: false, bugHint: undefined });
     expect(responseForBug(a, bugs[0])).toEqual({ kind: 'order', order: [1, 2, 0] });
     // array matches never apply to other answer kinds
@@ -191,5 +196,28 @@ describe('checkAnswer: written with an Überschlag', () => {
   it('tasks without an Überschlag ignore the field', () => {
     const plain: Answer = { kind: 'written', op: 'add', operands: [12, 30], result: 42 };
     expect(checkAnswer(plain, { kind: 'written', result: '42' })).toEqual({ correct: true, wrongColumns: [] });
+  });
+});
+
+describe('checkAnswer: bug ids (error-library tags for the improvement tracking)', () => {
+  it('reports the id of the matched bug for every answer kind that has bugs', () => {
+    const multi: Answer = { kind: 'multi', fields: [{ id: 'e', value: 3 }, { id: 'c', value: 45 }] };
+    expect(checkAnswer(multi, { kind: 'multi', values: { e: '3', c: '4' } }, [{ id: 'null-hinten', match: { c: 4 }, hint: 'h' }]).bugId).toBe('null-hinten');
+    const written: Answer = { kind: 'written', op: 'add', operands: [48, 37], result: 85 };
+    expect(checkAnswer(written, { kind: 'written', result: '75' }, [{ id: 'add.no-carry', match: 75, hint: 'h' }]).bugId).toBe('add.no-carry');
+    const div: Answer = { kind: 'written', op: 'div', operands: [23, 5], result: 4, remainder: 3 };
+    const divBugs: Bug[] = [{ id: 'div.rest-vergessen', match: 4, remainder: 0, hint: 'Rest' }];
+    expect(checkAnswer(div, { kind: 'written', result: '4', remainder: '' }, divBugs).bugId).toBe('div.rest-vergessen');
+    const line: Answer = { kind: 'numberline', min: 0, max: 100, majorStep: 10, minorStep: 1, step: 1, value: 40, tolerance: 0, labelMajor: true };
+    expect(checkAnswer(line, { kind: 'numberline', value: 50 }, [{ id: 'nachbar', match: 50, hint: 'h' }]).bugId).toBe('nachbar');
+    const unsolvable: Answer = { kind: 'number', value: null, offerUnsolvable: true };
+    expect(checkAnswer(unsolvable, { kind: 'number', text: '12' }, [{ id: 'fehlt-0', match: 12, hint: 'h' }]).bugId).toBe('fehlt-0');
+    expect(checkAnswer(unsolvable, { kind: 'number', text: '13' }, [{ id: 'fehlt-0', match: 12, hint: 'h' }]).bugId).toBeUndefined();
+  });
+  it('never reports a bug id for a correct answer or a wrong choice option', () => {
+    const answer: Answer = { kind: 'number', value: 85 };
+    expect(checkAnswer(answer, { kind: 'number', text: '85' }, [{ id: 'x', match: 85, hint: 'h' }]).bugId).toBeUndefined();
+    const choice: Answer = { kind: 'choice', options: [{ label: 'a' }, { label: 'b', whyWrong: 'w' }], correct: 0 };
+    expect(checkAnswer(choice, { kind: 'choice', index: 1 }).bugId).toBeUndefined();
   });
 });

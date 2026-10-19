@@ -91,6 +91,11 @@ export default function PrivacyPage() {
             Übungstag,
           </li>
           <li>je Einmaleins-Aufgabe: wie oft sie geübt und richtig gelöst wurde, Wiederholungsstufe und nächster Wiederholungstag,</li>
+          <li>
+            für die Abzeichen fürs Besserwerden: je Übungsbereich und Stufe, ob die ersten 10 Aufgaben im ersten Versuch gelöst
+            wurden, sowie je Übungsbereich, welche typischen Fehlerarten vorkamen und wie oft sie danach vermieden wurden (jeweils
+            nur mit dem Datum, ohne Uhrzeit),
+          </li>
           <li>Übungstage und die Zahl der Wiederholungen am selben Tag (nur das Datum, ohne Uhrzeit),</li>
           <li>welche Übung und Stufe zuletzt geübt wurde (für „Weiter üben“, ohne Datum und Uhrzeit),</li>
           <li>erhaltene Abzeichen mit Datum, die eigene beste Blitzrunde und einfache Summen, zum Beispiel die Zahl gelöster Aufgaben,</li>

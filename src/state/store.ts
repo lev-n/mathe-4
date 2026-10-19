@@ -15,6 +15,7 @@
  */
 import { badgeById, evaluateBadges } from './badges';
 import { insertDay, isDay, today } from './dates';
+import { applyGrowth, emptyGrowth } from './growth';
 import { applyAnswer } from './mastery';
 import { IMPORT_MESSAGES, parseText, sanitizeSettingsPatch, serializeState } from './schema';
 import { DEFAULT_SETTINGS } from './types';
@@ -49,12 +50,13 @@ export interface Store {
 
 export function emptyState(): ProgressState {
   return {
-    version: 2,
+    version: 3,
     skills: {},
     facts: {},
     days: [],
     badges: {},
     totals: { answered: 0, firstTry: 0, afterHint: 0, rounds: 0, checksPassed: 0 },
+    growth: emptyGrowth(),
     settings: { ...DEFAULT_SETTINGS },
   };
 }
@@ -234,13 +236,15 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
     recordAnswer(event) {
       const day = validDay(event.day);
       const applied = applyAnswer(state, event, day);
-      if (!applied.counted) return { before: applied.before, after: applied.after, newBadges: [], suggestNextStufe: false };
-      let next = applied.state;
+      if (!applied.counted) return { before: applied.before, after: applied.after, newBadges: [], suggestNextStufe: false, growth: [] };
+      // Improvements are measured against the child's own earlier answers (docs/research.md M16).
+      const grown = applyGrowth(state, applied.state, event, day);
+      let next = grown.state;
       let newBadges: BadgeDef[] = [];
       // Optional NRW extras never earn badges.
       if (!event.optional) ({ state: next, badges: newBadges } = withNewBadges(next, day));
       commit(next);
-      return { before: applied.before, after: applied.after, newBadges, suggestNextStufe: applied.suggestNextStufe };
+      return { before: applied.before, after: applied.after, newBadges, suggestNextStufe: applied.suggestNextStufe, growth: grown.events };
     },
 
     recordRound(round) {

@@ -1,13 +1,15 @@
 /**
  * Success-framed round summary (docs/research.md §6.1 step 6, M15): counts instead of stars for the round,
- * stars only for the mastery state of a Stufe, newly earned badges revealed calmly, and two equally
- * weighted buttons. No autoplay into the next round.
+ * stars only for the mastery state of a Stufe, what the child improved compared with their own earlier answers
+ * (M16, largest first), newly earned badges revealed calmly, and two equally weighted buttons. No autoplay into
+ * the next round. This is the only place where badges and improvements appear after a round (never mid-round).
  */
 import type { MouseEvent, Ref } from 'react';
 import type { Stufe } from '../../core/types';
 import type { BadgeDef, MasteryState } from '../../state/types';
 import { MASTERY_STARS } from '../../state/selectors';
 import { MASTERY_LABEL } from '../app/labels';
+import { IMPROVED_HEADING } from './growthText';
 import { stufeLabel, summaryText } from './phrases';
 
 export interface MasteryLine {
@@ -19,10 +21,19 @@ export interface MasteryLine {
   levelUp: boolean;
 }
 
+/** A line of "Das hast du verbessert" (text from growthText.noteText). */
+export interface SummaryNote {
+  key: string;
+  text: string;
+  /** Kinds 3–5 (error overcome, skill improved, lasting improvement). */
+  big: boolean;
+}
+
 export interface RoundSummaryProps {
   solved: number;
   answered: number;
   mastery: MasteryLine[];
+  notes?: SummaryNote[];
   badges: BadgeDef[];
   nextStufe: Stufe | null;
   onAgain: () => void;
@@ -49,6 +60,7 @@ export default function RoundSummary({
   solved,
   answered,
   mastery,
+  notes = [],
   badges,
   nextStufe,
   onAgain,
@@ -81,6 +93,21 @@ export default function RoundSummary({
             </li>
           ))}
         </ul>
+      )}
+
+      {notes.length > 0 && (
+        <section className="pr-improved" aria-labelledby="pr-improved-h">
+          <h3 className="pr-improved__title" id="pr-improved-h">
+            {IMPROVED_HEADING}
+          </h3>
+          <ul className="pr-improved__list">
+            {notes.map((n) => (
+              <li key={n.key} className={`pr-improved__line${n.big ? ' is-big' : ''}`}>
+                {n.text}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {badges.length > 0 && (

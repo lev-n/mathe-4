@@ -199,6 +199,18 @@ function HowItWorks() {
         </li>
       </ul>
 
+      <h3>Abzeichen fürs Besserwerden</h3>
+      <p>
+        Die wichtigsten Abzeichen gibt es nicht für fehlerfreie Runden, sondern dafür, dass ein Kind besser wird, als es selbst
+        vorher war: wenn ein typischer Fehler (zum Beispiel ein vergessener Übertrag) in den nächsten Aufgaben nicht mehr
+        vorkommt, wenn eine Aufgabenart am Anfang schwerfiel und an einem späteren Tag gut gelingt, und vor allem, wenn eine
+        Aufgabe, die vorher danebenging, Tage später in der Wiederholung auf Anhieb klappt. Kleine Fortschritte in einer Runde
+        bekommen nur einen kurzen Satz. Die großen Abzeichen brauchen einen Nachweis an einem späteren Tag, absichtlich falsche
+        Antworten bringen also nichts. Verglichen wird nur mit dem eigenen früheren Stand; „Mein Fortschritt“ zeigt unter „So
+        hast du dich verbessert“, was besser geworden ist. Dafür werden nur die Ergebnisse der ersten Versuche, Fehlerarten und
+        Tage gespeichert, wie alles andere nur auf diesem Gerät und erst nach „Ja, merken“.
+      </p>
+
       <h3>Faires Design</h3>
       <p>
         Das Kind kann jede Runde jederzeit mit einem Klick verlassen. Es gibt kein automatisches Weiterspielen, keine Pop-ups während

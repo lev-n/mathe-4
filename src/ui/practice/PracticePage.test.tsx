@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOX, TIMES } from '../../core/format';
 import type { Exercise, SkillDef, TopicModule } from '../../core/types';
 import { DEFAULT_SETTINGS, type RoundSlot } from '../../state/types';
-import { EXAMPLE_AGAIN_INTRO, EXAMPLE_INTRO, NORMALISING_PHRASES, UNCHANGED_ANSWER } from './phrases';
+import { serializeState } from '../../state/schema';
+import { EFFORT_PHRASES, EXAMPLE_AGAIN_INTRO, EXAMPLE_INTRO, NORMALISING_PHRASES, TWIN_SOLVED_PHRASES, UNCHANGED_ANSWER } from './phrases';
 import { resetPracticeVisit } from './visit';
 
 // ── Test doubles ────────────────────────────────────────────────────────────
@@ -679,6 +680,123 @@ describe('PracticePage: attempts, examples and focus', () => {
     fireEvent.click(within(pad).getByRole('button', { name: 'Prüfen' }));
     expect(screen.getByText('Richtig!')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Weiter' })).toBeTruthy();
+  });
+});
+
+describe('PracticePage: improvements in the round summary', () => {
+  const improved = () => screen.queryByRole('region', { name: 'Das hast du verbessert' });
+  const isEffort = (t: string) => (EFFORT_PHRASES as readonly string[]).includes(t);
+  const praiseLines = () => [...document.querySelectorAll('.pr-item .pr-praise, .pr-item p')].map((p) => p.textContent ?? '');
+
+  it('small improvements (2nd try, twin task) get one calm line each, announced with the summary', async () => {
+    practised();
+    await startSkillRound();
+    // 1: wrong once (bug hint), then right → 2nd try
+    const v = solution();
+    answer(String(v + firstFactor()));
+    prufen();
+    answer(String(v));
+    prufen();
+    weiter();
+    // 2: needs the solution → Zwillingsaufgabe at the end; 3: right
+    failItem();
+    weiter();
+    answer(String(solution()));
+    prufen();
+    weiter();
+    // the twin, first try: a calm in-item line, no badge, no pop-up
+    expect(screen.getByText('Eine ähnliche Aufgabe wie vorhin')).toBeTruthy();
+    answer(String(solution()));
+    prufen();
+    expect(praiseLines().some((t) => (TWIN_SOLVED_PHRASES as readonly string[]).includes(t))).toBe(true);
+    expect(improved()).toBeNull();
+    weiter();
+
+    const section = improved()!;
+    expect(within(section).getByRole('heading', { level: 3, name: 'Das hast du verbessert' })).toBeTruthy();
+    expect(within(section).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst.',
+      'Eine Aufgabe hast du im zweiten Versuch selbst gelöst.',
+    ]);
+    expect(section.querySelector('.is-big')).toBeNull();
+    expect(screen.queryByText('Neues Abzeichen')).toBeNull();
+    expect(live()).toBe(
+      '3 von 4 geschafft – 1 Aufgabe war noch knifflig. Das hast du verbessert: Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst. Eine Aufgabe hast du im zweiten Versuch selbst gelöst.',
+    );
+  });
+
+  it('an error overcome on a later day: shown first and emphasised, with its badge, only after the round', async () => {
+    roundState.size = 5;
+    // Earlier (another day) the child made the "one row too many" mistake in this skill.
+    const st = store.get();
+    store.importJson(serializeState({ ...st, growth: { ...st.growth, errors: { 'kopfrechnen.test': { 'one-more': { day: '2000-01-01', seen: 2, run: 0 } } } } }));
+    practised();
+    await startSkillRound();
+    for (let i = 0; i < 5; i++) {
+      answer(String(solution()));
+      prufen();
+      // never during the round: no badge, no improvement note, nothing announced about it
+      expect(document.body.textContent).not.toMatch(/Fehler überwunden|Abzeichen|verbessert/);
+      expect(live()).not.toMatch(/Abzeichen|verbessert/);
+      weiter();
+    }
+    const heading = screen.getByRole('heading', { level: 2, name: 'Runde geschafft' });
+    expect(document.activeElement).toBe(heading);
+    const section = improved()!;
+    const lines = within(section).getAllByRole('listitem');
+    expect(lines.map((li) => li.textContent)).toEqual(['Testeinmaleins: Du hast einen Fehler, der dir vorher passiert war, jetzt fünfmal vermieden.']);
+    expect(lines[0].className).toContain('is-big');
+    expect(screen.getByRole('heading', { level: 3, name: 'Neues Abzeichen' })).toBeTruthy();
+    expect(screen.getByText('Fehler überwunden')).toBeTruthy();
+    expect(live()).toBe(
+      '5 von 5 geschafft. Das hast du verbessert: Testeinmaleins: Du hast einen Fehler, der dir vorher passiert war, jetzt fünfmal vermieden. Neues Abzeichen: Fehler überwunden.',
+    );
+    expect(store.get().badges['fehler-ueberwunden']).toBeDefined();
+    expect(vi.mocked(store.recordAnswer).mock.calls.every((c) => c[0].bugTags?.[0] === 'one-more')).toBe(true);
+  });
+
+  it('keyboard and reading order: heading (focused), counts, improvements, badges, then the two equal buttons', async () => {
+    roundState.size = 1;
+    practised();
+    await startSkillRound();
+    // the whole item by keyboard: Enter checks (twice), focus then sits on Weiter
+    const v = solution();
+    answer(String(v + firstFactor()));
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    answer(String(v));
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(screen.getByText('Richtig!')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Weiter' }));
+    weiter();
+    const summary = document.querySelector('.pr-summary')!;
+    expect(document.activeElement).toBe(within(summary as HTMLElement).getByRole('heading', { level: 2 }));
+    const section = improved()!;
+    // the notes are text only: nothing to tab through before the buttons
+    expect(section.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
+    const focusables = [...summary.querySelectorAll<HTMLElement>('button, a[href]')].map((b) => b.textContent);
+    expect(focusables).toEqual(['Noch eine Runde', 'Fertig für heute']);
+    const order = [summary.querySelector('h2'), summary.querySelector('.pr-summary__count'), section, summary.querySelector('.pr-pair')];
+    for (let i = 1; i < order.length; i++) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('caps the in-item acknowledgements per round: wrong answers on purpose do not keep paying', async () => {
+    roundState.size = 5;
+    practised();
+    await startSkillRound();
+    let acknowledged = 0;
+    for (let i = 0; i < 5; i++) {
+      const v = solution();
+      answer(String(v + firstFactor()));
+      prufen();
+      answer(String(v));
+      prufen();
+      if (praiseLines().some(isEffort)) acknowledged += 1;
+      weiter();
+    }
+    expect(acknowledged).toBe(3);
+    // the summary aggregates them into one line
+    expect(within(improved()!).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['5 Aufgaben hast du im zweiten Versuch selbst gelöst.']);
+    expect(store.get().badges).toEqual({});
   });
 });
 

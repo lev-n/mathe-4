@@ -9,12 +9,13 @@
  */
 import { isDay } from './dates';
 import { isFactKey } from './facts';
-import { CHECKS_SIZE, MAX_BOX, RECENT_SIZE, parseSkillKey } from './mastery';
+import { ERROR_MIN_SEEN, GROWTH_WINDOW, OVERCOME_RUN, capTracks, emptyGrowth, normalizeTag } from './growth';
+import { CHECKS_SIZE, MAX_BOX, RECENT_SIZE, TOPIC_IDS, parseSkillKey } from './mastery';
 import type { StoredStufeProgress } from './mastery';
 import { DEFAULT_SETTINGS } from './types';
-import type { Day, FactProgress, MasteryState, ProgressState, Settings } from './types';
+import type { Day, ErrorTrack, FactProgress, Growth, GrowthStufe, MasteryState, ProgressState, Settings } from './types';
 
-export const CURRENT_VERSION = 2;
+export const CURRENT_VERSION = 3;
 /** Marker that identifies a Mathe-4 backup file. */
 export const APP_MARKER = 'mathe4';
 export const MAX_IMPORT_CHARS = 2_000_000;
@@ -68,11 +69,43 @@ export function migrateV1toV2(data: Obj): Obj {
 }
 
 /**
+ * v2 → v3: adds the improvement tracking (`growth`, docs/research.md M16), seeded conservatively from what v2 kept,
+ * and only for skill-Stufen that are still 'geuebt' (still being learned):
+ * - the early window starts with their `recent` results (the closest to the start that v2 knows; when it is full,
+ *   `last` is taken as the day it ended). v2 did not tell wrong attempts from help, so every miss there counts as
+ *   a wrong attempt (`earlyWrong`);
+ * - a miss in `recent` gives `miss = last`. The real miss was on that day or before, so a later "days after the
+ *   miss" can only be underestimated, never overstated.
+ * 'sicher'/'gemeistert' entries get nothing: their misses may be old or help only, and must not turn into a wave of
+ * rewards right after the update. Errors (tags) and Einmaleins misses were not stored by v2 and start empty.
+ * Entries that are not shaped like v2 entries are skipped; the strict validation afterwards still rejects them.
+ */
+export function migrateV2toV3(data: Obj): Obj {
+  const growth = emptyGrowth();
+  if (isObj(data.skills)) {
+    for (const [key, entry] of Object.entries(data.skills)) {
+      if (!parseSkillKey(key) || !isObj(entry)) continue;
+      const recent = boolList(entry.recent, RECENT_SIZE);
+      if (!recent || recent.length === 0) continue;
+      if (entry.state !== 'geuebt') continue;
+      const last = isDay(entry.last) ? entry.last : undefined;
+      const g: GrowthStufe = { early: recent.slice(0, GROWTH_WINDOW), after: 0 };
+      const misses = g.early.filter((r) => !r).length;
+      if (misses > 0) g.earlyWrong = misses;
+      if (g.early.length === GROWTH_WINDOW && last) g.earlyDay = last;
+      if (misses > 0 && last) g.miss = last;
+      growth.stufen[key] = g;
+    }
+  }
+  return { ...data, version: 3, growth };
+}
+
+/**
  * MIGRATIONS[n] upgrades a document of version n to version n + 1.
  * When the schema changes: bump ProgressState.version, add the step and a unit test with a stored
  * document of the old version.
  */
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: migrateV1toV2 };
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: migrateV1toV2, 2: migrateV2toV3 };
 
 export type MigrateResult = { ok: true; data: Obj } | { ok: false; error: SchemaError };
 
@@ -191,10 +224,95 @@ function parseFact(v: unknown): FactProgress | null {
   return f;
 }
 
+const SKILL_ID_RE = /^([a-z]+)\.[A-Za-z0-9_.-]{1,60}$/;
+
+function isSkillId(id: string): boolean {
+  const m = SKILL_ID_RE.exec(id);
+  return !!m && (TOPIC_IDS as readonly string[]).includes(m[1]);
+}
+
+function parseGrowthStufe(v: unknown): GrowthStufe | null {
+  if (!isObj(v)) return null;
+  // The early window is the *first* answers: a longer list keeps its beginning.
+  const early = boolList(v.early, Number.MAX_SAFE_INTEGER)?.slice(0, GROWTH_WINDOW);
+  const earlyDay = optionalDay(v.earlyDay);
+  const miss = optionalDay(v.miss);
+  const improved = optionalDay(v.improved);
+  if (!early || !isCount(v.after, GROWTH_WINDOW) || !earlyDay.ok || !miss.ok || !improved.ok) return null;
+  if (v.kept !== undefined && !isCount(v.kept)) return null;
+  if (v.earlyWrong !== undefined && !isCount(v.earlyWrong, GROWTH_WINDOW)) return null;
+  const g: GrowthStufe = { early, after: v.after };
+  if (typeof v.earlyWrong === 'number' && v.earlyWrong > 0) g.earlyWrong = Math.min(v.earlyWrong, early.length);
+  if (earlyDay.day) g.earlyDay = earlyDay.day;
+  if (miss.day) g.miss = miss.day;
+  if (improved.day) g.improved = improved.day;
+  if (typeof v.kept === 'number' && v.kept > 0) g.kept = v.kept;
+  return g;
+}
+
+/** An error track, or null if it is unusable (then it is dropped; counts above today's limits are clamped). */
+function parseTrack(v: unknown): ErrorTrack | null {
+  if (!isObj(v) || !isDay(v.day) || !isCount(v.run) || !isCount(v.seen) || v.seen < 1) return null;
+  const done = optionalDay(v.done);
+  if (!done.ok) return null;
+  const t: ErrorTrack = { day: v.day, seen: Math.min(v.seen, ERROR_MIN_SEEN), run: Math.min(v.run, OVERCOME_RUN) };
+  if (done.day) t.done = done.day;
+  return t;
+}
+
+/** Two tracks of tags that normalise to the same tag: the later error, the more evidence, overcome if either was. */
+function mergeTracks(a: ErrorTrack, b: ErrorTrack): ErrorTrack {
+  const t: ErrorTrack = { day: a.day > b.day ? a.day : b.day, seen: Math.max(a.seen, b.seen), run: Math.max(a.run, b.run) };
+  const done = a.done && b.done ? (a.done < b.done ? a.done : b.done) : (a.done ?? b.done);
+  if (done) t.done = done;
+  return t;
+}
+
+/** `growth` of a v3 document (null if anything is malformed). */
+function parseGrowth(raw: unknown): Growth | null {
+  if (!isObj(raw) || !isObj(raw.stufen) || !isObj(raw.errors) || !isObj(raw.facts)) return null;
+  const out = emptyGrowth();
+  const stufenKeys = Object.keys(raw.stufen);
+  if (stufenKeys.length > MAX_SKILL_ENTRIES) return null;
+  for (const key of stufenKeys) {
+    const g = parseSkillKey(key) ? parseGrowthStufe(raw.stufen[key]) : null;
+    if (!g) return null;
+    out.stufen[key] = g;
+  }
+  const skillIds = Object.keys(raw.errors);
+  if (skillIds.length > MAX_SKILL_ENTRIES) return null;
+  for (const skillId of skillIds) {
+    const tracks = raw.errors[skillId];
+    if (!isSkillId(skillId) || !isObj(tracks)) return null;
+    const tags = Object.keys(tracks);
+    if (tags.length > 1_000) return null;
+    // Tags are a detail of the improvement tracking: a tag that a later version normalises differently is merged,
+    // an unusable one is dropped and the list is trimmed, so a changed rule never makes stored progress unloadable.
+    const parsed: Record<string, ErrorTrack> = {};
+    for (const stored of tags) {
+      const tag = normalizeTag(stored);
+      const t = tag ? parseTrack(tracks[stored]) : null;
+      if (!tag || !t) continue;
+      parsed[tag] = Object.prototype.hasOwnProperty.call(parsed, tag) ? mergeTracks(parsed[tag], t) : t;
+    }
+    if (Object.keys(parsed).length > 0) out.errors[skillId] = capTracks(parsed);
+  }
+  const factKeys = Object.keys(raw.facts);
+  if (factKeys.length > MAX_FACT_ENTRIES) return null;
+  for (const key of factKeys) {
+    const day = raw.facts[key];
+    if (!isFactKey(key) || !isDay(day)) return null;
+    out.facts[key] = day;
+  }
+  return out;
+}
+
 /** Strict validation of a current-version document. `knownBadge` filters badge ids (unknown ones are dropped). */
 export function validateState(data: Obj, knownBadge: (id: string) => boolean = () => true): { state: ProgressState; settingsValid: boolean } | null {
   if (data.version !== CURRENT_VERSION) return null;
   const { skills, facts, days, badges, totals, blitzBest, reviewed, lastPlayed } = data;
+  const growth = parseGrowth(data.growth);
+  if (!growth) return null;
   if (!isObj(skills) || !isObj(facts) || !Array.isArray(days) || !isObj(badges) || !isObj(totals)) return null;
 
   const skillKeys = Object.keys(skills);
@@ -239,6 +357,7 @@ export function validateState(data: Obj, knownBadge: (id: string) => boolean = (
     days: outDays,
     badges: outBadges,
     totals: { answered: t.answered, firstTry: t.firstTry, afterHint: t.afterHint, rounds: t.rounds, checksPassed: t.checksPassed },
+    growth,
     settings: settings ?? { ...DEFAULT_SETTINGS },
   };
   if (blitzBest !== undefined) state.blitzBest = blitzBest;

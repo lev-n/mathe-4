@@ -292,6 +292,70 @@ describe('ProgressPage', () => {
   });
 });
 
+describe('ProgressPage: "So hast du dich verbessert"', () => {
+  const T = Array(10).fill(true);
+  /** Runden: Stufe 1 went from 4 of 10 to 9 of 10; Stufe 2 became 'Sicher' after a hard start and was kept in a review. */
+  function improvedState(): ProgressState {
+    const s = stateWith({
+      'zahlen.runden#1': progress('geuebt', { recent: [true, true, true, true, false, true, true, true, true, true] }),
+      'zahlen.runden#2': progress('sicher', { recent: T }),
+      'zahlen.stellenwert#1': progress('geuebt', { recent: [true, false, false, false, false, false, false, false, false, false] }),
+      'schriftlich.plus#1': progress('sicher', { recent: T }),
+    });
+    s.growth = {
+      stufen: {
+        'zahlen.runden#1': { early: [true, false, true, false, true, false, true, false, false, false], earlyDay: '2026-10-10', after: 10 },
+        'zahlen.runden#2': { early: [false, false, true, false, true, false, true, false, false, true], earlyWrong: 6, earlyDay: '2026-10-11', after: 4, kept: 1 },
+        // got worse: never shown
+        'zahlen.stellenwert#1': { early: [true, true, true, false, false, true, true, false, false, false], earlyDay: '2026-10-12', after: 10 },
+      },
+      errors: { 'schriftlich.plus': { 'add.no-carry': { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' }, 'add.misaligned': { day: '2026-10-13', seen: 2, run: 2 } } },
+      facts: {},
+    };
+    return s;
+  }
+
+  it('lists only improvements per skill, positively worded, under the topic', async () => {
+    current.state = improvedState();
+    render(<ProgressPage />);
+    const zahlen = await screen.findByRole('region', { name: /^Zahlen bis/ });
+    const growth = await within(zahlen).findByRole('region', { name: 'So hast du dich verbessert' });
+    expect(within(growth).getByRole('heading', { level: 3, name: 'So hast du dich verbessert' })).toBeTruthy();
+    const skills = within(growth).getAllByRole('listitem').filter((li) => li.classList.contains('progress-growth__skill'));
+    expect(skills.map((li) => li.querySelector('.progress-growth__name')!.textContent)).toEqual(['Runden']);
+    expect(within(skills[0]).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Stufe 1: Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10.',
+      'Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt „Sicher“.',
+      'Stufe 2: Etwas, das vorher knifflig war, hast du Tage später in der Wiederholung auf Anhieb gelöst.',
+    ]);
+    // Stellenwerte got worse: nothing is said about it.
+    expect(growth.textContent).not.toContain('Stellenwerte');
+    const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
+    const lines = within(within(schriftlich).getByRole('region', { name: 'So hast du dich verbessert' })).getAllByRole('listitem').map((li) => li.textContent);
+    expect(lines).toContain('Du hast den Übertrag fünfmal richtig beachtet.');
+    expect(lines.join(' ')).not.toMatch(/misaligned|Untereinander/);
+  });
+
+  it('shows nothing (no empty box, no pressure) without improvement', async () => {
+    current.state = stateWith({ 'zahlen.runden#1': progress('geuebt', { recent: [true, false] }) });
+    render(<ProgressPage />);
+    await screen.findByRole('table');
+    expect(screen.queryByRole('region', { name: 'So hast du dich verbessert' })).toBeNull();
+  });
+
+  it('the view is plain text in headings and lists: nothing to operate, the topic link stays reachable by keyboard', async () => {
+    current.state = improvedState();
+    render(<ProgressPage />);
+    const growth = (await screen.findAllByRole('region', { name: 'So hast du dich verbessert' }))[0];
+    expect(growth.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
+    const link = screen.getByRole('link', { name: 'Weiter üben: Zahlen' });
+    expect(link.compareDocumentPosition(growth) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    const text = document.body.textContent ?? '';
+    for (const banned of BANNED_PHRASES) expect(text.toLowerCase()).not.toContain(banned);
+    expect(text).not.toMatch(/schneller|schlau|besser als|andere Kinder/i);
+  });
+});
+
 describe('BadgesPage', () => {
   it('lists only earned badges (newest first) and keeps the rest a surprise', () => {
     current.state = stateWith({}, { badges: { 'runden-profi': '2026-10-01', 'einmaleins-profi': '2026-10-12', 'unbekannt': '2026-10-13' } });

@@ -401,6 +401,8 @@ export interface CheckResult {
   invalid?: string;
   /** Targeted hint from a matched Bug or a wrong ChoiceOption. */
   bugHint?: string;
+  /** Id of the matched Bug (internal, never shown): the error-library tag of this mistake (src/state/growth.ts). */
+  bugId?: string;
   /** multi: correctness per field id. */
   fieldCorrect?: Record<string, boolean>;
   /** written: wrong result digit positions, 0 = Einer (rightmost). */

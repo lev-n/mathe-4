@@ -17,9 +17,11 @@ const totals = (patch: Partial<ProgressState['totals']>): ProgressState => {
 };
 
 describe('badge definitions', () => {
-  it('has 15–25 badges with unique ids and titles', () => {
-    expect(BADGES.length).toBeGreaterThanOrEqual(15);
-    expect(BADGES.length).toBeLessThanOrEqual(25);
+  it('has 15–25 mastery badges plus at most 5 improvement badges, with unique ids and titles', () => {
+    const mastery = BADGES.filter((b) => !b.improvement);
+    expect(mastery.length).toBeGreaterThanOrEqual(15);
+    expect(mastery.length).toBeLessThanOrEqual(25);
+    expect(BADGES.filter((b) => b.improvement).map((b) => b.id)).toEqual(['fehler-ueberwunden', 'besser-geworden', 'behalten', 'lange-behalten']);
     expect(new Set(BADGES.map((b) => b.id)).size).toBe(BADGES.length);
     expect(new Set(BADGES.map((b) => b.title)).size).toBe(BADGES.length);
   });

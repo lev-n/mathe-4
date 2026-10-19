@@ -42,6 +42,11 @@ export const SUGGEST_RUN = 5;
 
 const RECENT_PURPOSES: ReadonlySet<RoundPurpose> = new Set<RoundPurpose>(['practice', 'mixed', 'twin']);
 
+/** Answers of these purposes feed `recent` (review and Blitz answers do not). */
+export function feedsRecent(purpose: RoundPurpose): boolean {
+  return RECENT_PURPOSES.has(purpose);
+}
+
 /** Record (not array) so the compiler checks that every TopicId is listed; order = TOPICS order. */
 const TOPIC_ORDER: Record<TopicId, true> = {
   zahlen: true,

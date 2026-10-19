@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BANNED_PHRASES } from '../core/testing';
 import { applyAnswer } from './mastery';
-import { IMPORT_MESSAGES, MAX_IMPORT_CHARS, MIGRATIONS, migrate, migrateV1toV2, parseDocument, parseSettings, parseText, sanitizeSettingsPatch, serializeState, validateState } from './schema';
+import { applyGrowth } from './growth';
+import { IMPORT_MESSAGES, MAX_IMPORT_CHARS, MIGRATIONS, migrate, migrateV1toV2, migrateV2toV3, parseDocument, parseSettings, parseText, sanitizeSettingsPatch, serializeState, validateState } from './schema';
 import type { Migration } from './schema';
-import { emptyState } from './store';
+import { createStore, emptyState } from './store';
 import { ev } from './testkit';
 import { DEFAULT_SETTINGS } from './types';
 import type { ProgressState } from './types';
@@ -15,6 +16,18 @@ function richState(): ProgressState {
   s = applyAnswer(s, ev({ skillId: 'zahlen.binaer', optional: true, day: '2026-10-20' })).state;
   s = applyAnswer(s, ev({ purpose: 'review', day: '2026-10-20' })).state;
   return { ...s, badges: { 'zahlen-sicher': '2026-10-19' }, blitzBest: 17, settings: { ...s.settings, weeklyGoal: 4, nrwExtras: true } };
+}
+
+/** richState() with improvement tracking in every part of `growth`. */
+function grownState(): ProgressState {
+  let s = richState();
+  const events = [
+    ev({ day: '2026-10-21', firstTry: false, bugTags: ['abrunden-1', 'aufgerundet'], bugIds: ['abrunden-1'] }),
+    ev({ day: '2026-10-22', bugTags: ['abrunden'] }),
+    ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '4x6', firstTry: false, day: '2026-10-22' }),
+  ];
+  for (const e of events) s = applyGrowth(s, applyAnswer(s, e).state, e, e.day).state;
+  return s;
 }
 
 const doc = (state: ProgressState) => JSON.parse(serializeState(state)) as Record<string, unknown>;
@@ -50,7 +63,7 @@ describe('serialisation round trip', () => {
   it('writes the app marker and the version', () => {
     const d = doc(emptyState());
     expect(d.app).toBe('mathe4');
-    expect(d.version).toBe(2);
+    expect(d.version).toBe(3);
   });
 
   it('accepts a document without the app marker if it looks like a state', () => {
@@ -87,12 +100,12 @@ describe('migrate', () => {
     expect(migrate({ version: 0 }, {}, 1)).toEqual({ ok: false, error: 'invalid' });
   });
 
-  it('the current schema (v2) needs no migration; unknown older versions are ignored safely', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
+  it('the current schema (v3) needs no migration; unknown older versions are ignored safely', () => {
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2']);
     const d = doc(richState());
     expect(migrate(d)).toEqual({ ok: true, data: d });
     expect(parseDocument({ ...d, version: 0 })).toEqual({ ok: false, error: 'invalid' });
-    expect(parseDocument({ ...d, version: 3 })).toEqual({ ok: false, error: 'newer-version' });
+    expect(parseDocument({ ...d, version: 4 })).toEqual({ ok: false, error: 'newer-version' });
   });
 });
 
@@ -117,7 +130,7 @@ describe('v1 → v2: session ids are replaced by a count', () => {
     const r = parseText(JSON.stringify(v1()), (id) => id !== 'wochenziel');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.version).toBe(2);
+    expect(r.state.version).toBe(3);
     expect(r.state.skills['zahlen.runden#1']).toEqual({ attempts: 12, recent: Array(10).fill(true), practiceDays: 3, state: 'sicher', sicherSince: '2026-10-01', box: 2, due: '2026-10-20', checks: [true], last: '2026-10-17' });
     expect(r.state.skills['geometrie.umfang#2'].practiceDays).toBe(1);
     expect(r.state.facts).toEqual(v1().facts);
@@ -156,6 +169,150 @@ describe('v1 → v2: session ids are replaced by a count', () => {
     const text = JSON.stringify(v1()).replace('"skills":{', '"skills":{"__proto__":{"attempts":1,"recent":[],"sessions":["a"],"state":"geuebt","box":0,"checks":[]},');
     expect(parseText(text)).toEqual({ ok: false, error: 'invalid' });
     expect(Object.keys(migrateV1toV2(JSON.parse(text)).skills as object)).toContain('__proto__');
+  });
+});
+
+describe('v2 → v3: improvement tracking is added and seeded conservatively', () => {
+  /** A document as v2 stored it (no `growth`). */
+  const v2 = () => ({
+    app: 'mathe4',
+    version: 2,
+    skills: {
+      // still 'geuebt' with a full window of 10: the early window starts from it, it ended on `last`
+      'zahlen.runden#1': { attempts: 14, recent: [false, false, false, true, true, true, false, true, true, false], practiceDays: 2, state: 'geuebt', box: 0, checks: [], last: '2026-10-15' },
+      // 'geuebt' with 3 answers: the window keeps filling
+      'zahlen.runden#2': { attempts: 3, recent: [true, true, false], practiceDays: 1, state: 'geuebt', box: 0, checks: [], last: '2026-10-16' },
+      // 'sicher' without a miss in recent: nothing to seed
+      'geometrie.umfang#1': { attempts: 10, recent: Array(10).fill(true), practiceDays: 2, state: 'sicher', sicherSince: '2026-10-10', box: 1, due: '2026-10-11', checks: [], last: '2026-10-12' },
+      // 'sicher' with a miss in recent: only the miss (on `last` or earlier)
+      'schriftlich.addition#2': { attempts: 12, recent: [true, false, true, true, true, true, true, true, true, true], practiceDays: 3, state: 'sicher', sicherSince: '2026-10-12', box: 2, due: '2026-10-20', checks: [true], last: '2026-10-17' },
+    },
+    facts: { '3x7': { box: 2, due: '2026-10-20', seen: 4, correct: 3 } },
+    days: ['2026-10-12', '2026-10-15', '2026-10-16', '2026-10-17'],
+    badges: { 'zahlen-sicher': '2026-10-12' },
+    totals: { answered: 39, firstTry: 30, afterHint: 2, rounds: 4, checksPassed: 1 },
+    settings: { ...DEFAULT_SETTINGS, weeklyGoal: 2 },
+  });
+
+  it('a stored v2 document loads as v3; everything v2 had stays the same', () => {
+    const r = parseText(JSON.stringify(v2()));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.version).toBe(3);
+    expect(r.state.skills).toEqual(v2().skills);
+    expect(r.state.facts).toEqual(v2().facts);
+    expect(r.state.badges).toEqual(v2().badges);
+    expect(r.state.totals).toEqual(v2().totals);
+    expect(r.state.growth).toEqual({
+      stufen: {
+        'zahlen.runden#1': { early: v2().skills['zahlen.runden#1'].recent, earlyWrong: 5, earlyDay: '2026-10-15', after: 0, miss: '2026-10-15' },
+        'zahlen.runden#2': { early: [true, true, false], earlyWrong: 1, after: 0, miss: '2026-10-16' },
+        // 'sicher' entries get nothing: no wave of rewards for old (or help-only) misses right after the update
+      },
+      errors: {},
+      facts: {},
+    });
+  });
+
+  it('migrated progress keeps working: the seeded start and miss of a Geübt entry lead to later improvements', () => {
+    const s = createStore(null);
+    expect(s.importJson(JSON.stringify(v2()))).toEqual({ ok: true });
+    // a 'sicher' entry from v2 gives no reward for its old misses
+    const old = s.recordAnswer(ev({ skillId: 'schriftlich.addition', topicId: 'schriftlich', stufe: 2, purpose: 'review', day: '2026-10-20' }));
+    expect(old.growth).toEqual([]);
+    // the seeded early window (5 of 10, 5 misses) of a 'geuebt' entry: 'Sicher' on a later day is "besser"
+    const seen = Array.from({ length: 4 }, () => s.recordAnswer(ev({ day: '2026-10-19' })).growth).flat();
+    expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, level: 'sicher' }]);
+    // and its seeded miss (on the last v2 day) is kept in a review days later
+    const review = s.recordAnswer(ev({ day: '2026-10-20', purpose: 'review' }));
+    expect(review.growth).toEqual([{ kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 5 }]);
+  });
+
+  it('a v2 document without a usable recent list is not seeded; invalid v2 entries stay invalid', () => {
+    const d = v2();
+    (d.skills['zahlen.runden#1'] as Record<string, unknown>).recent = ['ja'];
+    expect(migrateV2toV3(d).growth).toEqual({ stufen: expect.not.objectContaining({ 'zahlen.runden#1': expect.anything() }), errors: {}, facts: {} });
+    expect(parseDocument(d)).toEqual({ ok: false, error: 'invalid' });
+  });
+
+  it('does not let a __proto__ key into the seeded growth', () => {
+    const text = JSON.stringify(v2()).replace('"skills":{', '"skills":{"__proto__":{"attempts":1,"recent":[false],"practiceDays":1,"state":"geuebt","box":0,"checks":[],"last":"2026-10-16"},');
+    const migrated = migrateV2toV3(JSON.parse(text));
+    expect(Object.getPrototypeOf((migrated.growth as { stufen: object }).stufen)).toBe(Object.prototype);
+    expect(parseText(text)).toEqual({ ok: false, error: 'invalid' });
+  });
+
+  it('a v1 document is migrated through v2 to v3', () => {
+    const v1 = { ...v2(), version: 1, skills: { 'zahlen.runden#2': { attempts: 1, recent: [false], sessions: ['a'], state: 'geuebt', box: 0, checks: [], last: '2026-10-16' } } };
+    const r = parseDocument(v1);
+    expect(r.ok && r.state.version).toBe(3);
+    expect(r.ok && r.state.growth.stufen).toEqual({ 'zahlen.runden#2': { early: [false], earlyWrong: 1, after: 0, miss: '2026-10-16' } });
+  });
+
+  it('round trip keeps the growth data exactly', () => {
+    const s = grownState();
+    expect(Object.keys(s.growth.errors)).toEqual(['zahlen.runden']);
+    expect(s.growth.facts).toEqual({ '4x6': '2026-10-22' });
+    const r = parseText(serializeState(s));
+    expect(r.ok && r.state).toEqual(s);
+  });
+});
+
+describe('validation of the improvement tracking', () => {
+  const base = () => doc(grownState());
+  type G = { stufen: Record<string, Record<string, unknown>>; errors: Record<string, Record<string, Record<string, unknown>>>; facts: Record<string, unknown> };
+  const g = (d: Record<string, unknown>) => d.growth as G;
+  const stufe = (d: Record<string, unknown>) => g(d).stufen['zahlen.runden#1'];
+
+  const cases: Array<[string, (d: Record<string, unknown>) => unknown]> = [
+    ['growth missing (a v3 document always has it)', (d) => delete d.growth],
+    ['growth not an object', (d) => (d.growth = [])],
+    ['stufen missing', (d) => delete (d.growth as Record<string, unknown>).stufen],
+    ['bad skill key', (d) => (g(d).stufen['zahlen.runden#7'] = stufe(d))],
+    ['early with strings', (d) => (stufe(d).early = ['ja'])],
+    ['after above 10', (d) => (stufe(d).after = 11)],
+    ['after negative', (d) => (stufe(d).after = -1)],
+    ['earlyDay not a day', (d) => (stufe(d).earlyDay = 'gestern')],
+    ['miss not a day', (d) => (stufe(d).miss = 20261019)],
+    ['kept fractional', (d) => (stufe(d).kept = 1.5)],
+    ['errors for an unknown topic', (d) => (g(d).errors['musik.noten'] = {})],
+    ['errors not an object', (d) => (g(d).errors['zahlen.runden'] = [] as unknown as Record<string, Record<string, unknown>>)],
+    ['non-canonical fact key', (d) => (g(d).facts['6x4'] = '2026-10-19')],
+    ['fact miss not a day', (d) => (g(d).facts['4x6'] = true)],
+  ];
+
+  it.each(cases)('%s → invalid', (_name, mutate) => {
+    const d = base();
+    mutate(d);
+    expect(parseDocument(d)).toEqual({ ok: false, error: 'invalid' });
+  });
+
+  it('tags are a detail: re-normalised, merged, trimmed or dropped, never a reason to reject stored progress', () => {
+    const d = base();
+    const errors = g(d).errors['zahlen.runden'];
+    errors['abrunden-3'] = { day: '2026-10-25', seen: 1, run: 2 }; // merges with 'abrunden' (later day, more evidence)
+    errors['ein tag'] = { day: '2026-10-19', seen: 1, run: 0 }; // dropped
+    errors.ohneTag = { seen: 1, run: 0 }; // no day: dropped
+    errors.kaputt = { day: '2026-10-19', seen: 1, run: 0, done: 'ja' }; // bad done: dropped
+    errors.lauf = { day: '2026-10-19', seen: 7, run: 9 }; // clamped to the current limits
+    for (let i = 0; i < 9; i++) errors[`extra${'abcdefghi'[i]}x`] = { day: `2026-09-0${i + 1}`, seen: 1, run: 0 };
+    const r = parseDocument(d);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const tracks = r.state.growth.errors['zahlen.runden'];
+    expect(Object.keys(tracks)).toHaveLength(8);
+    expect(tracks.abrunden).toEqual({ day: '2026-10-25', seen: 1, run: 2 });
+    expect(tracks.lauf).toEqual({ day: '2026-10-19', seen: 2, run: 5 });
+    for (const gone of ['ein tag', 'ohneTag', 'kaputt', 'abrunden-3', 'extraax']) expect(tracks[gone], gone).toBeUndefined();
+  });
+
+  it('cuts an over-long early window to its first 10 and drops a zero kept count', () => {
+    const d = base();
+    stufe(d).early = [true, ...Array(14).fill(false)];
+    stufe(d).kept = 0;
+    const r = parseDocument(d);
+    expect(r.ok && r.state.growth.stufen['zahlen.runden#1'].early).toEqual([true, ...Array(9).fill(false)]);
+    expect(r.ok && 'kept' in r.state.growth.stufen['zahlen.runden#1']).toBe(false);
   });
 });
 

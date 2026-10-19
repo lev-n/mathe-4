@@ -32,6 +32,16 @@ export const NORMALISING_PHRASES = [
 
 export const TWIN_NOTE = 'Gleich kommt eine ähnliche Aufgabe. Dann weißt du, worauf du achten musst.';
 
+/** A Zwillingsaufgabe solved first try after the worked solution: a small, calm acknowledgement (M16; rotates). */
+export const TWIN_SOLVED_PHRASES = [
+  'Diesmal hast du es auf Anhieb gelöst.',
+  'Du hast genutzt, was du im Lösungsweg gesehen hast.',
+  'Diesmal hat es gleich geklappt.',
+  'Du hast den Lösungsweg auf die neue Aufgabe übertragen.',
+  'Jetzt hast du es selbst gelöst.',
+  'Du hast dir gemerkt, worauf du achten musst.',
+] as const;
+
 /** Intro line of the 'So geht's' example after the Einstiegs-Check (the child has already tried). */
 export const EXAMPLE_INTRO = 'Hier siehst du an einem Beispiel, wie es geht.';
 /** Intro line when the example comes back after 2 items in a row needed the solution. */

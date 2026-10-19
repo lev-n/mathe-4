@@ -7,10 +7,16 @@
  * Conditions use only topic prefixes, counts, facts and totals, so they do not depend on other
  * modules' exact skill ids. NRW extras (optional entries) never count, and the Blitzrunde never feeds
  * any of these numbers.
+ *
+ * Improvement badges (docs/research.md M16, src/state/growth.ts) are the most significant ones: they reward
+ * getting better than one's own earlier self, and each needs evidence from a later day or from a spaced
+ * review, so answering wrong on purpose does not pay off. Small improvements (a 2nd try, a twin task) get
+ * only a calm line in the round, never a badge.
  */
 import { fmt } from '../core/format';
 import type { TopicId } from '../core/types';
 import { ALL_FACT_KEYS, KERN_FACT_KEYS } from './facts';
+import { growthFacts, type GrowthFacts } from './growth';
 import { TOPIC_IDS, isAtLeastSicher, isOptionalEntry, parseSkillKey } from './mastery';
 import type { BadgeDef, ProgressState } from './types';
 
@@ -23,6 +29,8 @@ export interface BadgeFacts {
   gemeistertTotal: number;
   /** Topics with ≥ 1 skill sicher on Stufe 3. */
   stufe3Topics: number;
+  /** Improvements (NRW extras excluded). */
+  growth: GrowthFacts;
 }
 
 interface BadgeRule extends BadgeDef {
@@ -72,6 +80,8 @@ export const BADGE_THRESHOLDS = {
   themenProfiSkills: 3,
   stufe3Topics: 3,
   gedaechtnis: 5,
+  /** Distinct skills with a lasting improvement for 'Lange behalten'. */
+  langeBehaltenSkills: 3,
 } as const;
 
 function factsAtLeast(state: ProgressState, keys: readonly string[], box: number): boolean {
@@ -142,10 +152,43 @@ const RULES: BadgeRule[] = [
     icon: '🔁',
     met: (s) => s.totals.checksPassed >= BADGE_THRESHOLDS.wiederholung,
   },
+  // ── Improvement badges (docs/research.md M16), from the 3rd kind of improvement upwards ──
+  {
+    id: 'fehler-ueberwunden',
+    title: 'Fehler überwunden',
+    description: 'Du hast einen Fehler, der dir passiert war, danach fünfmal vermieden. Das hat auch an einem anderen Tag geklappt.',
+    icon: '🔧',
+    improvement: true,
+    met: (_s, f) => f.growth.overcome >= 1,
+  },
+  {
+    id: 'besser-geworden',
+    title: 'Besser geworden',
+    description: 'Du hast eine Aufgabenart geübt, die am Anfang knifflig war. An einem späteren Tag hast du viel mehr davon auf Anhieb gelöst.',
+    icon: '📈',
+    improvement: true,
+    met: (_s, f) => f.growth.improved >= 1,
+  },
+  {
+    id: 'behalten',
+    title: 'Gut behalten',
+    description: 'Du hast etwas, das vorher knifflig war, Tage später in der Wiederholung auf Anhieb gelöst.',
+    icon: '🌱',
+    improvement: true,
+    met: (_s, f) => f.growth.kept >= 1,
+  },
+  {
+    id: 'lange-behalten',
+    title: 'Lange behalten',
+    description: 'Du hast bei drei verschiedenen Aufgabenarten Tage später noch gewusst, was vorher knifflig war.',
+    icon: '🌳',
+    improvement: true,
+    met: (_s, f) => f.growth.keptSkills >= BADGE_THRESHOLDS.langeBehaltenSkills,
+  },
 ];
 
-/** 15–25 competence-named badges (no participation badges, never announced in advance). */
-export const BADGES: BadgeDef[] = RULES.map(({ id, title, description, icon }) => ({ id, title, description, icon }));
+/** Competence- and improvement-named badges (no participation badges, never announced in advance). */
+export const BADGES: BadgeDef[] = RULES.map(({ id, title, description, icon, improvement }) => (improvement ? { id, title, description, icon, improvement } : { id, title, description, icon }));
 
 const zeroPerTopic = (): Record<TopicId, number> => Object.fromEntries(TOPIC_IDS.map((t) => [t, 0])) as Record<TopicId, number>;
 
@@ -167,7 +210,7 @@ export function badgeFacts(state: ProgressState): BadgeFacts {
   }
   const sicherSkills = zeroPerTopic();
   for (const t of TOPIC_IDS) sicherSkills[t] = sicherSkillIds[t].size;
-  return { sicherSkills, gemeistert, gemeistertTotal, stufe3Topics: stufe3.size };
+  return { sicherSkills, gemeistert, gemeistertTotal, stufe3Topics: stufe3.size, growth: growthFacts(state) };
 }
 
 /** Ids of badges whose condition is met but that are not yet in state.badges. */
