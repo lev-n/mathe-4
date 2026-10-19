@@ -219,7 +219,6 @@ export function applyAnswer(state: ProgressState, event: AnswerEvent, day: Day =
   const totals: ProgressState['totals'] = {
     answered: t.answered + 1,
     firstTry: t.firstTry + (event.firstTry ? 1 : 0),
-    afterHint: t.afterHint + (!optional && event.solved && !event.firstTry ? 1 : 0),
     rounds: t.rounds,
     checksPassed: t.checksPassed + (!optional && checkPassed ? 1 : 0),
   };

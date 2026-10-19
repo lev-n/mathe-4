@@ -156,11 +156,6 @@ export interface ProgressState {
   totals: {
     answered: number;
     firstTry: number;
-    /**
-     * Solved, but not first try ("drangeblieben"): on the 2nd attempt after the hint, or with 'Tipp' / the
-     * example. Help alone counts too, so it is not used for the improvement tracking (src/state/growth.ts).
-     */
-    afterHint: number;
     rounds: number;
     checksPassed: number;
   };

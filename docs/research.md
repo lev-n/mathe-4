@@ -607,7 +607,7 @@ WCAG 2.5.7 (AA) and 2.1.1 (A) require that dragging can be replaced by single ta
 | M4 | Mindset interventions have tiny effects (d ≈ 0.08) [47][54–56] | No mindset lessons or videos. At most one normalising sentence per session, either when the child first enters a harder Stufe or after a second wrong attempt. Status labels use "noch nicht" wording. No neuro-hype and no claim of grade gains. |
 | M5 | Choice, competence and relatedness drive intrinsic motivation [57–59] | The child chooses the topic (7) and the Stufe. The app shows a suggestion ("Vorschlag: Runden – Stufe 2") but never locks or forces it. Each decision offers 2–4 options. A mascot animal and a colour theme are chosen once, can be changed, and are never rewarded. Language is non-controlling ("Du kannst noch eine Runde üben"). |
 | M6 | Expected tangible rewards undermine intrinsic motivation, especially in children (d = −0.39) [60] | No currency, shop, unlockables, or points for logins or time spent. Rewards are never announced before a task ("Hol dir 3 Sterne!" is not used). Stars appear afterwards and come with a legend. Badges arrive as a surprise and name the competence ("Du kannst jetzt Zahlen bis 1 Million sicher runden."). There is no to-do list of badges to chase. |
-| M7 | Gamification effects are small and uncertain [46][61] | At most four motivation elements: progress per topic, 0–3 stars per Stufe, 15–25 mastery badges, and an optional weekly practice-day goal. No story screens. The first exercise is at most 2 taps from the home screen. *Implementation note:* the badge element now has 22 mastery badges plus 4 improvement badges (M16). They are no fifth element: they use the same gallery and the same surprise rule, and the 15–25 limit applies to the mastery badges. |
+| M7 | Gamification effects are small and uncertain [46][61] | At most four motivation elements: progress per topic, 0–3 stars per Stufe, 15–25 mastery badges, and an optional weekly practice-day goal. No story screens. The first exercise is at most 2 taps from the home screen. *Implementation note:* the badge element has 21 mastery badges plus 4 improvement badges (M16), 25 in all. The improvement badges are no fifth element: they use the same gallery and the same surprise rule, and the 15–25 limit applies to all badges together (7.6). |
 | M8 | Performance graphs raise felt competence; skill badges look less risky than participation badges (small correlational study, mixed); leaderboards plus mandatory badges harmed in one course [62–65] | Each topic has a personal progress graph that compares only with the child's own past. Badges are skill badges with concrete criteria, e.g. "Runden-Profi: zwei Runden hintereinander mit mindestens 8 von 10 richtig auf Stufe 3". No leaderboards, rankings, percentiles or participation badges. The badge gallery is on its own screen. |
 | M9 | Maths anxiety is linked to lower achievement [66–69] | The app says "Üben" and "Training", never "Test" or "Prüfung". No red X, no buzzer; sound is off by default. Wrong answers use a neutral accent colour plus an icon plus text. "Tipp" and "Pause / Fertig für heute" are always visible. Round summaries count successes. Missed items come back later through the scheduler, not in immediate repetition loops. |
 | M10 | Timers: plausible harm, mixed evidence [36][70] | An optional "Blitzrunde" for Einmaleins and Kopfrechnen, available only for facts that are Gemeistert. It lasts 2 minutes, with no shrinking bar, and ends with a calm "Die Zeit ist um." It compares only with the child's own best, never affects stars, badges or mastery, and can be hidden by a parent or teacher. |
@@ -735,7 +735,7 @@ WCAG 2.5.7 (AA) and 2.1.1 (A) require that dragging can be replaced by single ta
   A low start partly rises again by chance (regression to the mean). So "Besser geworden" may overstate learning even though the numbers shown are true.
 - The caps: per round at most 3 effort lines after a second try, at most 2 twin lines (a round has at most 2 twins) and 4 "Das hast du verbessert" notes. Check whether children read them as recognition or as noise. Also check whether children who are almost always right feel overlooked. In one small classroom experiment (one teacher, two history classes, N = 17 and 19), both above- and below-average pupils under an individual norm at first felt less encouraged to take part. After about 2 weeks this passed. By the end, all groups felt more encouraged than the above-average pupils under a social norm [175].
 - Whether "Vieles behalten" should require first-try success for the same task type in spaced reviews on two different days, instead of or in addition to three different topics. This would move closer to successive relearning (practice to criterion, repeated over several spaced sessions) [196][197]. In one classroom study, the benefit of interleaving was almost twice as large on a test 30 days later as on a test one day later [195] (see also [193]).
-- Whether any child answers wrong on purpose to earn improvement badges. Also check whether the count-based "Dranbleiber" badge invites this. It is earned for 10 knifflige Aufgaben solved with a hint or on the second try. In [188], incentives predicted the quantity of performance better than intrinsic motivation did, while intrinsic motivation predicted its quality better (meta-analysis across school, work and sport; abstract only).
+- Whether any child answers wrong on purpose to earn improvement badges. (The count-based "Dranbleiber" badge for 10 knifflige Aufgaben solved with a hint or on the second try invited this, so it was removed, 7.6.) In [188], incentives predicted the quantity of performance better than intrinsic motivation did, while intrinsic motivation predicted its quality better (meta-analysis across school, work and sport; abstract only).
 
 ### 7.3 Curriculum questions
 
@@ -775,6 +775,28 @@ The following were used only via abstracts, summaries or secondary reports:
   - the journal version of [185], whose figures come from the conference paper.
 
 They are marked in section 8.
+
+### 7.6 Decisions by the operator (2026-10-19)
+
+- **Badges.** 25 in all, improvement badges included (M7). The count-based "Dranbleiber" badge was removed: it rewarded
+  effort alone and could be earned by answering wrong on purpose. Small improvements (a second try, a twin task) keep only
+  their calm lines in the round and in the summary, including the self-correction line that can appear in most rounds. Its
+  counter (`totals.afterHint`) is no longer stored; older saved progress and backups load without it.
+- **Badge names.** "Stolperstein überwunden", "Besser geworden", "Gut behalten" and "Vieles behalten" stay.
+- **One device per child.** Mathe 4 does not tell children apart: siblings who share a browser share one progress record,
+  improvement tracking included. The page for adults says so. Later: local profiles in the browser's storage, then an
+  export per profile. Note for that step: P2 plans profiles with picture avatars and without names, so a name field would
+  need P2 checked again.
+- **Stored data approved.** Storing error types per skill and the days of misses (M16, P1) for the improvement badges
+  is approved. The privacy page lists every field.
+- **Rollbacks.** The site is public but has no real users yet, so rolling back to an older version is acceptable as it
+  is: an older version never overwrites progress saved by a newer one; it stops saving and tells the adult. Check this
+  again before real users arrive.
+- **Accepted as they are.** Skills without error-library tags (for example geometrie.spiegeln, geometrie.koerper,
+  sachaufgaben.modellieren) cannot earn "Stolperstein überwunden", and the Einmaleins trainer is left to "Gut behalten".
+  Misses that cost nothing do not start a "Gut behalten". Relearning after a long break gets no reward of its own.
+  Without consent, the larger improvements rarely show. "Beenden" in the middle of a round drops that round's summary
+  lines (badges earned are kept).
 
 ---
 

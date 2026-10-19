@@ -1,7 +1,7 @@
 /**
  * Skill badges (docs/research.md M6–M8): named by competence, awarded as a surprise, never announced
  * in advance, no participation badges (§ 6.4). Every condition needs solved tasks (sicher/gemeistert
- * Stufen, known facts, tasks solved after a mistake, passed spaced checks); none is earned for
+ * Stufen, known facts, passed spaced checks, improvements); none is earned for
  * practice days or time spent (M6, M12 "virtual rewards for performing (repeated) actions"). The
  * weekly goal has its own gentle display and is never turned into a badge.
  * Conditions use only topic prefixes, counts, facts and totals, so they do not depend on other
@@ -11,8 +11,7 @@
  * Improvement badges (docs/research.md M16, src/state/growth.ts) are the most significant ones: they reward
  * getting better than one's own earlier self, and each needs evidence from a later day or from a spaced
  * review, so answering wrong on purpose does not pay off. Small improvements (a 2nd try, a twin task) get
- * only a calm line in the round; only the older count-based 'Dranbleiber' badge counts tasks solved with 'Tipp' or
- * on the 2nd try (an open decision, docs/research.md §7.2).
+ * only a calm line in the round, never a badge. 25 badges in all (docs/research.md M7).
  */
 import { fmt } from '../core/format';
 import type { TopicId } from '../core/types';
@@ -76,7 +75,6 @@ const TOPIC_TEXTS: Record<TopicId, TopicTexts> = {
 
 /** Thresholds (heuristics; documented so they can be tuned in a pilot). */
 export const BADGE_THRESHOLDS = {
-  dranbleiber: 10,
   wiederholung: 10,
   themenProfiSkills: 3,
   stufe3Topics: 3,
@@ -138,13 +136,6 @@ const RULES: BadgeRule[] = [
     description: 'Du kannst alle Aufgaben des kleinen Einmaleins sicher.',
     icon: '🏆',
     met: (s) => factsAtLeast(s, ALL_FACT_KEYS, 3),
-  },
-  {
-    id: 'dranbleiber',
-    title: 'Dranbleiber',
-    description: 'Du hast 10 knifflige Aufgaben mit Tipp oder im zweiten Versuch gelöst.',
-    icon: '💪',
-    met: (s) => s.totals.afterHint >= BADGE_THRESHOLDS.dranbleiber,
   },
   {
     id: 'wiederholung',

@@ -57,7 +57,7 @@ export function emptyState(): ProgressState {
     facts: {},
     days: [],
     badges: {},
-    totals: { answered: 0, firstTry: 0, afterHint: 0, rounds: 0, checksPassed: 0 },
+    totals: { answered: 0, firstTry: 0, rounds: 0, checksPassed: 0 },
     growth: emptyGrowth(),
     settings: { ...DEFAULT_SETTINGS },
   };

@@ -329,7 +329,8 @@ export function validateState(data: Obj, knownBadge: (id: string) => boolean = (
   }
 
   const t = totals;
-  if (!isCount(t.answered) || !isCount(t.firstTry) || !isCount(t.afterHint) || !isCount(t.rounds) || !isCount(t.checksPassed)) return null;
+  // Older documents also have `afterHint` (the count behind the removed 'Dranbleiber' badge): it is dropped.
+  if (!isCount(t.answered) || !isCount(t.firstTry) || !isCount(t.rounds) || !isCount(t.checksPassed)) return null;
   if (blitzBest !== undefined && !isCount(blitzBest, 100_000)) return null;
   if (reviewed !== undefined && !(isObj(reviewed) && isDay(reviewed.day) && isCount(reviewed.count))) return null;
   // lastPlayed is a convenience: a malformed value is dropped instead of rejecting the whole document.
@@ -343,7 +344,7 @@ export function validateState(data: Obj, knownBadge: (id: string) => boolean = (
     facts: outFacts,
     days: outDays,
     badges: outBadges,
-    totals: { answered: t.answered, firstTry: t.firstTry, afterHint: t.afterHint, rounds: t.rounds, checksPassed: t.checksPassed },
+    totals: { answered: t.answered, firstTry: t.firstTry, rounds: t.rounds, checksPassed: t.checksPassed },
     growth,
     settings: settings ?? { ...DEFAULT_SETTINGS },
   };

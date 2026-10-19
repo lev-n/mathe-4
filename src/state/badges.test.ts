@@ -17,11 +17,12 @@ const totals = (patch: Partial<ProgressState['totals']>): ProgressState => {
 };
 
 describe('badge definitions', () => {
-  it('has 15–25 mastery badges plus at most 5 improvement badges, with unique ids and titles', () => {
-    const mastery = BADGES.filter((b) => !b.improvement);
-    expect(mastery.length).toBeGreaterThanOrEqual(15);
-    expect(mastery.length).toBeLessThanOrEqual(25);
+  it('has 15–25 badges in all (improvement badges included), with unique ids and titles', () => {
+    expect(BADGES.length).toBeGreaterThanOrEqual(15);
+    expect(BADGES.length).toBeLessThanOrEqual(25);
     expect(BADGES.filter((b) => b.improvement).map((b) => b.id)).toEqual(['fehler-ueberwunden', 'besser-geworden', 'behalten', 'vieles-behalten']);
+    // no badge for effort alone: small improvements (2nd try, twin task) get a calm line in the round only
+    expect(badgeById('dranbleiber')).toBeUndefined();
     expect(new Set(BADGES.map((b) => b.id)).size).toBe(BADGES.length);
     expect(new Set(BADGES.map((b) => b.title)).size).toBe(BADGES.length);
   });
@@ -118,12 +119,6 @@ describe('cross-topic badges', () => {
   it('Einmaleins-Meister: all 55 facts in box ≥ 3', () => {
     expect(evaluateBadges(withFacts(facts(ALL_FACT_KEYS, 3)))).toEqual(['kernaufgaben', 'einmaleins']);
     expect(evaluateBadges(withFacts({ ...facts(ALL_FACT_KEYS, 3), '7x8': { box: 2, seen: 1, correct: 1 } }))).toEqual(['kernaufgaben']);
-  });
-
-  it('Dranbleiber: 10 tasks solved with a hint or on the second try', () => {
-    expect(evaluateBadges(totals({ afterHint: 9 }))).toEqual([]);
-    expect(evaluateBadges(totals({ afterHint: 10 }))).toEqual(['dranbleiber']);
-    expect(badgeById('dranbleiber')!.description).toBe('Du hast 10 knifflige Aufgaben mit Tipp oder im zweiten Versuch gelöst.');
   });
 
   it('Wiederholungs-Profi: 10 passed spaced checks', () => {

@@ -136,7 +136,8 @@ describe('v1 → v2: session ids are replaced by a count', () => {
     expect(r.state.skills['geometrie.umfang#2'].practiceDays).toBe(1);
     expect(r.state.facts).toEqual(v1().facts);
     expect(r.state.badges).toEqual({ 'zahlen-sicher': '2026-10-01' });
-    expect(r.state.totals).toEqual(v1().totals);
+    // the count behind the removed 'Dranbleiber' badge is dropped
+    expect(r.state.totals).toEqual({ answered: 13, firstTry: 11, rounds: 2, checksPassed: 1 });
     expect(r.state.blitzBest).toBe(4);
     expect(r.state.settings.weeklyGoal).toBe(2);
     const saved = serializeState(r.state);
@@ -195,7 +196,7 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     settings: { ...DEFAULT_SETTINGS, weeklyGoal: 2 },
   });
 
-  it('a stored v2 document loads as v3; everything v2 had stays the same', () => {
+  it('a stored v2 document loads as v3; everything v2 had stays the same, except the count behind the removed Dranbleiber badge', () => {
     const r = parseText(JSON.stringify(v2()));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -203,7 +204,8 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     expect(r.state.skills).toEqual(v2().skills);
     expect(r.state.facts).toEqual(v2().facts);
     expect(r.state.badges).toEqual(v2().badges);
-    expect(r.state.totals).toEqual(v2().totals);
+    // the count behind the removed 'Dranbleiber' badge is dropped
+    expect(r.state.totals).toEqual({ answered: 39, firstTry: 30, rounds: 4, checksPassed: 1 });
     expect(r.state.growth).toEqual({
       stufen: {
         // still 'geuebt': its misses count (more answers than the window, so it is not the real start: carried)

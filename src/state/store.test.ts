@@ -222,7 +222,7 @@ describe('corrupt or unknown stored data is ignored safely', () => {
       facts: {},
       days: ['2026-10-18'],
       badges: {},
-      totals: { answered: 3, firstTry: 3, afterHint: 0, rounds: 0, checksPassed: 0 },
+      totals: { answered: 3, firstTry: 3, rounds: 0, checksPassed: 0 },
       settings: DEFAULT_SETTINGS,
     };
     const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(v1) });
@@ -642,6 +642,17 @@ describe('export / import', () => {
     expect(target.get().skills).toEqual(source.get().skills);
     target.recordAnswer(ev({ firstTry: false, bugTags: ['abrunden'], bugIds: ['abrunden'], day: '2026-10-20' }));
     expect(target.get().growth.errors['zahlen.runden'].abrunden).toEqual({ day: '2026-10-20', seen: 1, run: 0 });
+  });
+
+  it("a backup with the removed 'Dranbleiber' badge and its count imports without them", () => {
+    const old = JSON.parse(source.exportJson());
+    old.badges = { ...old.badges, dranbleiber: '2026-10-15' };
+    old.totals = { ...old.totals, afterHint: 12 };
+    const target = createStore(null);
+    expect(target.importJson(JSON.stringify(old))).toEqual({ ok: true });
+    expect(target.get().badges.dranbleiber).toBeUndefined();
+    expect(target.get().totals).not.toHaveProperty('afterHint');
+    expect(target.exportJson()).not.toMatch(/dranbleiber|afterHint/);
   });
 
   it('import replaces progress and saves it when consent was given', () => {

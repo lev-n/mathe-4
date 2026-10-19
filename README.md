@@ -112,7 +112,7 @@ The app has ~25 interactive components (written-calculation grids, a number-line
 
 - Content was checked by automated tests and AI review, not yet by practising teachers. A pilot with a class is the best next step (see `docs/research.md` §7).
 - Written division and some extras differ between the Länder: division is part of LehrplanPLUS Bayern but not of the KMK standards. NRW extras (Binärzahlen, Tonnen, × 3-stellig) are hidden unless enabled.
-- Progress lives on one device. Use “Fortschritt sichern/laden” to move it between devices.
+- Progress lives on one device and belongs to one child: Mathe 4 does not tell children apart, so siblings sharing a browser share one record (local profiles are a later step, `docs/research.md` §7.6). Use “Fortschritt sichern/laden” to move it between devices.
 
 ## Contributing
 

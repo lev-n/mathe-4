@@ -499,6 +499,10 @@ export function StorageSection() {
           </>
         )}
       </div>
+      <p className="hint">
+        Der Fortschritt gehört zu einem Kind: Mathe 4 kennt keine Namen und unterscheidet nicht, wer übt. Üben mehrere Kinder
+        im selben Browser, mischt sich ihr Fortschritt. Dann hilft ein eigenes Browser-Profil für jedes Kind.
+      </p>
 
       <h3>Sichern und laden</h3>
       <p>
