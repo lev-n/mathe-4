@@ -143,6 +143,27 @@ describe('kind 3: error overcome', () => {
     expect(play(clean(D5, 6), s).outs.flatMap((o) => o.growth).filter((g) => g.kind === 'fehler')).toEqual([]);
   });
 
+  it('anti-farming: a Tipp or "So geht\'s" answer on the later day never completes it (only a first-try task does)', () => {
+    const tipp = ev({ ...offer, day: D2, firstTry: false, solved: true, usedHint: true, wrongAttempt: false });
+    const { s, outs } = play([...errTwice(D1), ...clean(D1, 5), tipp]);
+    expect(growthOf(outs)).toEqual([]);
+    expect(badgeIds(outs)).not.toContain('fehler-ueberwunden');
+    expect(track(s)).toEqual({ day: D1, seen: 2, run: 5 });
+    expect(s.recordAnswer(clean(D2)[0]).growth.map((g) => g.kind)).toEqual(['fehler']);
+  });
+
+  it('the Einmaleins trainer is left to kind 5 (every fact offers the same family, so any easy fact would count)', () => {
+    const fact = (factKey: string, day: string, extra: Partial<AnswerEvent> = {}) =>
+      ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', stufe: 1, factKey, day, bugTags: ['einmaleins'], ...extra });
+    const { s, outs } = play([
+      fact('6x7', D1, { firstTry: false, bugIds: ['einmaleins'] }),
+      fact('6x8', D1, { firstTry: false, bugIds: ['einmaleins'] }),
+      ...['2x10', '3x10', '4x10', '5x10', '1x7', '2x2'].map((k) => fact(k, D2)),
+    ]);
+    expect(s.get().growth.errors).toEqual({});
+    expect(growthOf(outs).filter((g) => g.kind === 'fehler')).toEqual([]);
+  });
+
   it('only tasks that offer the error count, and only in the same skill', () => {
     const other = ev({ ...offer, bugTags: ['add.misaligned'], day: D2 });
     const otherSkill = ev({ skillId: 'schriftlich.subtraktion', topicId: 'schriftlich', stufe: 2, bugTags: ['add.no-carry'], day: D2 });
@@ -215,7 +236,7 @@ describe('kind 4: skill improved (first 10 vs last 10, or a new level after a ha
     expect(events).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, recent: 8 }]);
     expect(growthOf(outs.slice(0, -1))).toEqual([]); // only when the windows no longer overlap
     expect(s.get().skills['zahlen.runden#1'].state).toBe('geuebt');
-    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: D1, after: 10, best: 8, miss: D2, improved: true });
+    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: D1, after: 10, best: 8, laterOk: 3, miss: D2, improved: true });
     expect(badgeIds(outs)).toContain('besser-geworden');
   });
 
@@ -230,12 +251,39 @@ describe('kind 4: skill improved (first 10 vs last 10, or a new level after a ha
     expect(growthOf(outs)).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, level: 'sicher' }]);
   });
 
-  it("'Sicher' on the day of the hard start counts once a later day confirms it (also in a review)", () => {
+  it("'Sicher' on the day of the hard start counts once later days confirm it with first-try answers (reviews too)", () => {
     const { s, outs } = play([...pattern('....xxxxxx', D1), ...pattern('xxxx', D1)]);
     expect(s.get().skills['zahlen.runden#1'].state).toBe('sicher');
     expect(growthOf(outs)).toEqual([]);
-    const out = s.recordAnswer(ev({ day: D2, purpose: 'review' }));
-    expect(out.growth).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 6, level: 'sicher' }]);
+    expect(s.recordAnswer(ev({ day: D2, purpose: 'review' })).growth).toEqual([]);
+    expect(s.recordAnswer(ev({ day: D2 })).growth).toEqual([]);
+    const out = s.recordAnswer(ev({ day: D5, purpose: 'review' }));
+    // the same review also shows a lasting improvement: the misses of D1 were real
+    expect(out.growth).toEqual([
+      { kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 6, level: 'sicher' },
+      { kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 4 },
+    ]);
+  });
+
+  it('anti-farming: misses on purpose and a same-day recovery are never confirmed by a wrong or help-only answer later', () => {
+    for (const later of [
+      ev({ day: D2, firstTry: false, solved: true }), // wrong in practice
+      ev({ day: D2, purpose: 'review', firstTry: false }), // wrong in a review
+      ev({ day: D2, firstTry: false, solved: true, usedHint: true, wrongAttempt: false }), // help only
+    ]) {
+      const { s, outs } = play([...pattern('..........', D1), ...pattern('xxxxxxxxx.', D1)]);
+      outs.push(s.recordAnswer(later), s.recordAnswer(later), s.recordAnswer(later));
+      expect(growthOf(outs), JSON.stringify(later)).toEqual([]);
+      expect(badgeIds(outs)).not.toContain('besser-geworden');
+    }
+  });
+
+  it('a decline is never shown as an improvement: with Sicher but fewer than at the start, only the level is named', () => {
+    // D1: 6 of 10 with 4 misses, then Sicher, then 2 misses; D2: 4 misses, then first-try answers on later days
+    const { s, outs } = play([...pattern('....xxxxxx', D1), ...pattern('xxxxxxxx..', D1), ...pattern('....', D2)]);
+    outs.push(...play([ev({ day: D2 }), ev({ day: D5, purpose: 'review' }), ev({ day: D5, purpose: 'review' })], s).outs);
+    const besser = growthOf(outs).filter((g) => g.kind === 'besser');
+    expect(besser).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 6, level: 'sicher' }]);
   });
 
   it('anti-farming: pressing Tipp before every task is no hard start (help is not a mistake)', () => {
@@ -253,13 +301,19 @@ describe('kind 4: skill improved (first 10 vs last 10, or a new level after a ha
     expect(s.get().growth.stufen['zahlen.runden#1'].improved).toBeUndefined();
   });
 
-  it('no hard start → never (correct answers stay rewarded by stars only)', () => {
+  it('a clear rise without a low start counts too (7 → 10 of 10 after 3 real mistakes)', () => {
     const start = 'x'.repeat(HARD_START_MAX + 1) + '...';
-    const outs = play([...pattern(start, D1), ...pattern('xxxxxxxxxx', D2), ...pattern('xxxxxxxxxx', D5)]).outs;
-    expect(growthOf(outs)).toEqual([]);
+    const outs = play([...pattern(start, D1), ...pattern('xxxxxxxxxx', D2)]).outs;
+    expect(growthOf(outs)).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 7, recent: 10 }]);
   });
 
-  it('a gain of 3 that ends below 7 of 10 is not "besser" yet', () => {
+  it('a good start → never (correct answers stay rewarded by stars only); help alone is no start to improve on', () => {
+    expect(growthOf(play([...pattern('xxxxxxxxx.', D1), ...pattern('xxxxxxxxxx', D2), ...pattern('xxxxxxxxxx', D5)]).outs)).toEqual([]);
+    const tipps = Array.from({ length: 3 }, () => ev({ day: D1, firstTry: false, solved: true, usedHint: true, wrongAttempt: false }));
+    expect(growthOf(play([...tipps, ...pattern('xxxxxxx', D1), ...pattern('xxxxxxxxxx', D2)]).outs)).toEqual([]);
+  });
+
+  it('a gain of 3 that ends below 8 of 10 is not "besser" yet', () => {
     const outs = play([...pattern('xxx.......', D1), ...pattern('xxx..x.x.x', D2)]).outs; // 3 → 6
     expect(growthOf(outs)).toEqual([]);
   });
@@ -324,11 +378,18 @@ describe('kind 5: lasting improvement in a spaced review', () => {
     expect(out.newBadges.map((b) => b.id)).not.toContain('behalten');
   });
 
-  it('a wrong answer that cost a Leitner box (review or mixed on a scheduled Stufe) arms it', () => {
-    const { s } = play(pattern('xxxxxxxxxx', D1));
-    s.recordAnswer(ev({ day: D2, purpose: 'mixed', firstTry: false }));
+  it('a wrong answer that cost something arms it: a review miss, or a mixed miss that lowered the Leitner box', () => {
+    const { s } = play(pattern('xxxxxxxxxx', D1)); // Sicher on D1: box 1, due D2
+    // a mixed miss at box 1 costs nothing (the box stays 1, the next review stays due): it arms nothing
+    s.recordAnswer(ev({ day: D1, purpose: 'mixed', firstTry: false }));
+    expect(s.get().growth.stufen['zahlen.runden#1'].miss).toBeUndefined();
+    s.recordAnswer(ev({ day: D2, purpose: 'review' })); // box 2
+    s.recordAnswer(ev({ day: D2, purpose: 'mixed', firstTry: false })); // back to box 1: arms
     expect(s.get().growth.stufen['zahlen.runden#1'].miss).toBe(D2);
     expect(s.recordAnswer(ev({ day: D5, purpose: 'review' })).growth.map((g) => g.kind)).toEqual(['behalten']);
+    // a review miss arms it as well
+    s.recordAnswer(ev({ day: '2026-10-24', purpose: 'review', firstTry: false }));
+    expect(s.get().growth.stufen['zahlen.runden#1'].miss).toBe('2026-10-24');
   });
 
   it('a review never missed before is no improvement (first-time correctness keeps its stars, no badge)', () => {
@@ -342,7 +403,11 @@ describe('kind 5: lasting improvement in a spaced review', () => {
     const fact = (factKey: string, day: string, extra: Partial<AnswerEvent> = {}) =>
       ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', stufe: 1, factKey, day, ...extra });
     const s = createStore(null);
+    // a brand-new fact (box 0) missed costs nothing (it stays in box 0): nothing armed
     s.recordAnswer(fact('7x3', D1, { firstTry: false }));
+    expect(s.get().growth.facts).toEqual({});
+    s.recordAnswer(fact('3x7', D1)); // box 1
+    s.recordAnswer(fact('7x3', D1, { firstTry: false })); // lost its box: armed
     expect(s.get().growth.facts).toEqual({ '3x7': D1 });
     expect(s.get().growth.stufen['kopfrechnen.einmaleins#1'].miss).toBeUndefined();
     expect(s.recordAnswer(fact('4x6', '2026-10-22', { purpose: 'review' })).growth).toEqual([]);
@@ -579,6 +644,26 @@ describe('robustness: shown progress never shrinks, clocks, caps, orphans', () =
     expect(t.recordAnswer(ev({ ...offer, day: D2 })).growth.map((g) => g.kind)).toEqual(['fehler']);
   });
 
+  it('a fact missed with the clock ahead is clamped and saved, so its review counts after the clock is right', () => {
+    const fact = (day: string, extra: Partial<AnswerEvent> = {}) => ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '3x7', day, ...extra });
+    const s = createStore(null);
+    s.recordAnswer(fact(D1)); // box 1
+    s.recordAnswer(fact('2027-03-01', { firstTry: false })); // clock ahead: armed on 2027-03-01
+    s.recordAnswer(ev({ day: D1 })); // clock right again (another skill)
+    s.recordAnswer(fact(D1, { purpose: 'review' }));
+    expect(s.get().growth.facts['3x7']).toBe(D1);
+    expect(s.recordAnswer(fact('2026-10-22', { purpose: 'review' })).growth.map((g) => g.kind)).toEqual(['behalten']);
+  });
+
+  it('a clock that is behind for one answer moves no stored day back and opens no later-day gate', () => {
+    const { s } = play([...pattern('.', D1), ...pattern('xxxxxxxxxx', D2), ...pattern('x', D5)]);
+    const before = s.get().growth;
+    // the tablet clock shows 2000-01-01 for one answer (practice days D1, D2 and D5 lie after it)
+    s.recordAnswer(ev({ day: '2000-01-01', firstTry: false }));
+    expect(s.get().growth).toEqual(before);
+    expect(s.recordAnswer(ev({ day: '2026-10-24', purpose: 'review' })).growth.map((g) => g.kind)).toEqual(['behalten']);
+  });
+
   it('when the cap is reached, single slips go first and an almost overcome error stays', () => {
     const tracks: Record<string, import('./types').ErrorTrack> = {
       nearly: { day: '2026-10-01', seen: 2, run: 4 },
@@ -615,8 +700,8 @@ describe('robustness: shown progress never shrinks, clocks, caps, orphans', () =
       'daten.zufall#1': { attempts: 0, recent: [], practiceDays: 0, state: 'neu', box: 0, checks: [] },
     });
     expect(g.stufen).toEqual({
-      'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15' },
-      'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16' },
+      'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15', missCarried: true },
+      'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16', missCarried: true },
       'geometrie.umfang#1': { earlyN: 10, earlyOk: 9, earlyWrong: 0, earlyDay: '2026-10-12', carried: true, after: 0 },
     });
     expect(g.errors).toEqual({});

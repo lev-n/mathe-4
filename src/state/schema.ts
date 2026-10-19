@@ -9,7 +9,7 @@
  */
 import { isDay } from './dates';
 import { isFactKey } from './facts';
-import { ERROR_MIN_SEEN, GROWTH_WINDOW, OVERCOME_RUN, capTracks, emptyGrowth, normalizeTag, seedGrowth } from './growth';
+import { ERROR_MIN_SEEN, GROWTH_WINDOW, LATER_OK_MIN, OVERCOME_RUN, capTracks, emptyGrowth, normalizeTag, seedGrowth } from './growth';
 import { CHECKS_SIZE, MAX_BOX, RECENT_SIZE, TOPIC_IDS, parseSkillKey } from './mastery';
 import type { StoredStufeProgress } from './mastery';
 import { DEFAULT_SETTINGS } from './types';
@@ -228,7 +228,12 @@ function parseGrowthStufe(v: unknown): GrowthStufe | null {
   if (v.carried === true) g.carried = true;
   const best = clampCount(v.best, GROWTH_WINDOW);
   if (best !== null) g.best = best;
-  if (isDay(v.miss)) g.miss = v.miss;
+  const laterOk = clampCount(v.laterOk, LATER_OK_MIN);
+  if (laterOk) g.laterOk = laterOk;
+  if (isDay(v.miss)) {
+    g.miss = v.miss;
+    if (v.missCarried === true) g.missCarried = true;
+  }
   if (v.improved === true) g.improved = true;
   if (isCount(v.kept) && v.kept > 0) g.kept = v.kept;
   return g;

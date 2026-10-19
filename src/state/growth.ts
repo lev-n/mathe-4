@@ -8,23 +8,28 @@
  *   2. zwilling – a Zwillingsaufgabe (inserted only after a revealed solution) solved first try. Round only.
  *   3. fehler   – a typical error (an error-library tag) that happened in ERROR_MIN_SEEN tasks of a skill did not
  *                 happen again: the next OVERCOME_RUN tasks of that skill that offer the same error were solved first
- *                 try, the last of them on a later day than the error. Once per skill and error.
- *   4. besser   – a hard start (≤ HARD_START_MAX of the first 10 first-try correct, with ≥ HARD_START_MIN_WRONG wrong
- *                 attempts) and, on a later day than the end of that early window, either the last 10 (not
- *                 overlapping the first 10) are ≥ IMPROVE_MIN_GAIN better and ≥ IMPROVE_MIN_RECENT, or a first-try
- *                 answer at 'sicher'/'gemeistert'. Once per skill-Stufe. (A low early window partly regresses to the
- *                 mean by chance; the numbers shown are still true. A pilot heuristic, docs/research.md §7.2.)
+ *                 try, the last of them on a later day than the error. Once per skill and error. (Einmaleins facts
+ *                 are left to kind 5, which tracks every fact on its own.)
+ *   4. besser   – real mistakes at the start (≥ HARD_START_MIN_WRONG wrong attempts in the first 10) and later-day
+ *                 evidence (≥ LATER_OK_MIN first-try answers on days after that early window, the last one now), then
+ *                 either the last 10 (not overlapping the first 10) are ≥ IMPROVE_MIN_GAIN better and
+ *                 ≥ IMPROVE_MIN_RECENT, or, after a hard start (also ≤ HARD_START_MAX first-try correct), the Stufe
+ *                 is 'sicher'/'gemeistert'. Once per skill-Stufe. (A low early window partly regresses to the mean by
+ *                 chance; the numbers shown are still true. A pilot heuristic, docs/research.md §7.2.)
  *   5. behalten – a task type the child once got wrong (the skill-Stufe, or the Einmaleins fact) solved first try in
  *                 a spaced review (the scheduler picks those items) ≥ LASTING_MIN_DAYS after the last miss.
  *
  * Anti-farming: kinds 1–2 are only acknowledged, at most a few times per round; kinds 3–5 need evidence from a
  * later day or from a review the child cannot start at will, and real wrong attempts (pressing 'Tipp' is never a
- * mistake to recover from); a miss on a Stufe that is already 'sicher' arms kind 5 only when it cost a Leitner
- * box; every badge is earned once. Nothing compares the child with anyone else. Thresholds are heuristics to tune
+ * mistake to recover from). A miss arms kind 5 only when it cost something: while the Stufe is still being learned,
+ * in a review, when it lowered a Leitner box (a mixed answer from box 2 up), or for a fact that had already left
+ * box 0. Every badge is earned once. Nothing compares the child with anyone else. Thresholds are heuristics to tune
  * in a pilot (docs/research.md §7.2).
  *
- * Stored data (ProgressState.growth) is aggregate only: counts, error-family tags and days (P1). Stored days are
- * clamped to the current day when read, so a device clock that was set ahead once cannot block detection for months.
+ * Stored data (ProgressState.growth) is aggregate only: counts, error-family tags and days (P1). A stored day later
+ * than the answer's day is clamped to it and saved, so a device clock that was set ahead once cannot block detection
+ * for months. An answer whose day lies before two or more earlier practice days (a clock that is behind) leaves the
+ * tracking unchanged, so it can neither open a later-day gate early nor overstate how long ago something was.
  */
 import type { Stufe } from '../core/types';
 import { daysBetween } from './dates';
@@ -42,6 +47,8 @@ export const HARD_START_MIN_WRONG = 3;
 export const IMPROVE_MIN_GAIN = 3;
 /** … and at least this many of the last 10 are first-try correct (the 'Sicher' level). */
 export const IMPROVE_MIN_RECENT = 8;
+/** First-try answers on later days than the early window before "besser" counts (later-session evidence). */
+export const LATER_OK_MIN = 3;
 /** The progress view shows a gain from this size on (gentler than the badge, never a decline). */
 export const VIEW_MIN_GAIN = 2;
 /** Tasks in which an error must have happened before it can be overcome (one slip is not an error pattern). */
@@ -123,7 +130,10 @@ export function seedGrowth(skills: Readonly<Record<string, StufeProgress>>): Gro
     const g: GrowthStufe = { earlyN: early.length, earlyOk: countTrue(early), earlyWrong: misses, after: 0 };
     if (g.earlyN === GROWTH_WINDOW && p.last) g.earlyDay = p.last;
     if (p.attempts > early.length) g.carried = true;
-    if (misses > 0 && p.last) g.miss = p.last;
+    if (misses > 0 && p.last) {
+      g.miss = p.last;
+      g.missCarried = true;
+    }
     growth.stufen[key] = g;
   }
   return growth;
@@ -154,6 +164,8 @@ const notAfter = (stored: Day | undefined, day: Day): Day | undefined => (stored
 
 /** Kind 3: the error tracks of the answer's skill. */
 function updateErrors(tracks: Record<string, ErrorTrack>, event: AnswerEvent, day: Day, events: GrowthEvent[]): Record<string, ErrorTrack> {
+  // Einmaleins facts: every fact offers the same family, so any easy fact would count; kind 5 tracks each fact.
+  if (normalizeFactKey(event.factKey)) return tracks;
   const offered = tagsOf(event.bugTags);
   const hits = tagsOf(event.bugIds).slice(0, MAX_BUGS_PER_ITEM);
   if (hits.length === 0 && !offered.some((t) => own(tracks, t))) return tracks;
@@ -172,7 +184,8 @@ function updateErrors(tracks: Record<string, ErrorTrack>, event: AnswerEvent, da
     // nor breaks it (the error itself did not happen).
     const run = event.firstTry ? Math.min(OVERCOME_RUN, t.run + 1) : wrong ? 0 : t.run;
     const updated: ErrorTrack = { ...t, day: notAfter(t.day, day)!, run };
-    if (run >= OVERCOME_RUN && day > updated.day) {
+    // Completed only by a first-try task on a later day (never by a Tipp or 'So geht's' answer).
+    if (event.firstTry && run >= OVERCOME_RUN && day > updated.day) {
       updated.done = day;
       events.push({ kind: 'fehler', skillId: event.skillId, stufe: event.stufe, tag, run });
     }
@@ -188,6 +201,7 @@ function updateStufe(
   day: Day,
   before: MasteryState,
   prevBox: number,
+  prevFactBox: number,
   after: MasteryState,
   recent: readonly boolean[],
   facts: Record<string, Day>,
@@ -210,18 +224,21 @@ function updateStufe(
   const disjoint = g.after >= GROWTH_WINDOW && recent.length >= GROWTH_WINDOW;
   const last = disjoint ? countTrue(recent.slice(-GROWTH_WINDOW)) : undefined;
   if (last !== undefined && last > (g.best ?? -1)) g.best = last;
+  const laterDay = g.earlyDay !== undefined && day > g.earlyDay;
+  if (laterDay && event.firstTry) g.laterOk = Math.min(LATER_OK_MIN, (g.laterOk ?? 0) + 1);
 
-  // Kind 4: a hard start, then clearly better on a later day (or a first-try answer at a new mastery level:
-  // 'sicher' reached on the day of the hard start counts once the next day confirms it).
-  if (!g.improved && isHardStart(g) && g.earlyDay !== undefined && day > g.earlyDay) {
+  // Kind 4: real mistakes at the start, then clearly better, shown by first-try answers on later days (the one now
+  // included): the last 10 clearly better than the first 10, or – after a hard start – the Stufe 'sicher'.
+  if (!g.improved && event.firstTry && laterDay && g.earlyN === GROWTH_WINDOW && g.earlyWrong >= HARD_START_MIN_WRONG && (g.laterOk ?? 0) >= LATER_OK_MIN) {
     const early = g.earlyOk;
     const gain = last !== undefined && last >= early + IMPROVE_MIN_GAIN && last >= IMPROVE_MIN_RECENT;
-    const rose = event.firstTry && isAtLeastSicher(after);
+    const rose = isHardStart(g) && isAtLeastSicher(after);
     if (gain || rose) {
       g.improved = true;
       const e: GrowthEvent = { kind: 'besser', skillId: event.skillId, stufe: event.stufe, early };
-      if (last !== undefined) e.recent = last;
-      if (rose) e.level = after as 'sicher' | 'gemeistert';
+      // The count only when it shows the gain (never "4 von 10" after "6 von 10"); otherwise the level.
+      if (gain) e.recent = last;
+      else e.level = after as 'sicher' | 'gemeistert';
       if (g.carried) e.carried = true;
       events.push(e);
     }
@@ -230,24 +247,35 @@ function updateStufe(
   // Kind 5: a once-missed task type solved first try in a spaced review days later.
   const factKey = normalizeFactKey(event.factKey);
   const missed = factKey ? notAfter(own(facts, factKey), day) : g.miss;
+  if (factKey && missed !== undefined) facts[factKey] = missed; // save the clamp, like g.miss and g.earlyDay
   const review = event.purpose === 'review';
-  // A wrong attempt arms it while the Stufe is still being learned, or when it cost a Leitner box (a review or a
-  // mixed answer on a scheduled Stufe; every fact miss lowers the fact's box). A slip in a practice round on a Stufe
-  // that is already 'sicher' costs nothing, so it cannot be turned into a reward.
-  const arms = wrong && (factKey !== null || !isAtLeastSicher(before) || ((review || event.purpose === 'mixed') && prevBox >= 1));
+  // A wrong attempt arms it only when it cost something, so a slip on purpose cannot be turned into a reward:
+  // while the Stufe is still being learned (it costs mastery progress), in a review (the child cannot start one,
+  // and it records a failed check), in mixed practice when it lowered the Leitner box (box 2 and up; box 1 stays),
+  // for a fact in a review or one that had already left box 0 (a box-0 fact keeps its box).
+  const arms =
+    wrong &&
+    (factKey !== null
+      ? review || prevFactBox >= 1
+      : !isAtLeastSicher(before) || (review && prevBox >= 1) || (event.purpose === 'mixed' && prevBox >= 2));
   if (review && event.firstTry && missed !== undefined && daysBetween(missed, day) >= LASTING_MIN_DAYS) {
     const e: GrowthEvent = { kind: 'behalten', skillId: event.skillId, stufe: event.stufe, days: daysBetween(missed, day) };
     if (factKey) {
       e.factKey = factKey;
       delete facts[factKey];
     } else {
+      if (g.missCarried) e.carried = true;
       delete g.miss;
+      delete g.missCarried;
     }
     g.kept = (g.kept ?? 0) + 1;
     events.push(e);
   } else if (arms) {
     if (factKey) facts[factKey] = day;
-    else g.miss = day;
+    else {
+      g.miss = day;
+      delete g.missCarried;
+    }
   }
   return g;
 }
@@ -271,11 +299,16 @@ export function applyGrowth(prev: ProgressState, next: ProgressState, event: Ans
   const key = `${event.skillId}#${event.stufe}`;
   const entry = next.skills[key];
   if (event.purpose === 'blitz' || !parseSkillKey(key) || !entry) return { state: next, events: [] };
+  // A clock that is behind (two or more earlier practice days lie after this answer's day): leave the tracking
+  // alone, so stored days never move back. One later day alone is taken for a clock that was ahead once.
+  if (prev.days.filter((d) => d > day).length >= 2) return { state: next, events: [] };
   const events: GrowthEvent[] = [];
   const growth = next.growth;
   const facts = { ...growth.facts };
   const was = prev.skills[key];
-  const stufe = updateStufe(own(growth.stufen, key), event, day, was?.state ?? 'neu', was?.box ?? 0, entry.state, entry.recent, facts, events);
+  const factKey = normalizeFactKey(event.factKey);
+  const prevFactBox = factKey ? (prev.facts[factKey]?.box ?? 0) : 0;
+  const stufe = updateStufe(own(growth.stufen, key), event, day, was?.state ?? 'neu', was?.box ?? 0, prevFactBox, entry.state, entry.recent, facts, events);
   const oldTracks = own(growth.errors, event.skillId) ?? {};
   const tracks = updateErrors(oldTracks, event, day, events);
   const errors = tracks === oldTracks ? growth.errors : { ...growth.errors, [event.skillId]: tracks };

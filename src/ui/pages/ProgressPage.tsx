@@ -156,7 +156,7 @@ export default function ProgressPage() {
 
       <section className="storage-note" aria-labelledby="storage-title">
         <h2 id="storage-title">Wo ist dein Fortschritt gespeichert?</h2>
-        {consent === 'granted' && saveStatus === 'failed' ? (
+        {consent === 'granted' && saveStatus !== 'ok' ? (
           <p>{SAVE_FAILED_CHILD}</p>
         ) : consent === 'granted' ? (
           <p>Dein Fortschritt ist nur auf diesem Gerät gespeichert. Nichts wird verschickt.</p>

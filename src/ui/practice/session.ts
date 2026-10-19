@@ -41,7 +41,7 @@ export interface ItemMeta {
   factKey?: string;
   /** NRW extra: does not count toward badges. */
   optional?: boolean;
-  /** Error-library tags this exercise offers (normalised Bug ids, src/state/growth.ts). */
+  /** Error-library tags this exercise offers (misconception families, src/topics/errorFamilies.ts tagsFor). */
   bugTags?: string[];
 }
 
@@ -85,7 +85,7 @@ export interface FinishedItem {
   optional?: boolean;
   /** Error-library tags the exercise offered (ItemMeta.bugTags). */
   bugTags?: string[];
-  /** Ids of the known mistakes (matched Bugs) the child made in this item (1st and 2nd attempt). */
+  /** Raw ids of the known mistakes (matched Bugs) in this item (1st and 2nd attempt); Round maps them to families. */
   bugIds?: string[];
 }
 

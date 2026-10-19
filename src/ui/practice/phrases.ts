@@ -35,10 +35,10 @@ export const TWIN_NOTE = 'Gleich kommt eine ähnliche Aufgabe. Dann weißt du, w
 /** A Zwillingsaufgabe solved first try after the worked solution: a small, calm acknowledgement (M16; rotates). */
 export const TWIN_SOLVED_PHRASES = [
   'Du hast genutzt, was du im Lösungsweg gesehen hast.',
-  'Du hast den Rechenweg auf die neue Aufgabe übertragen.',
+  'Du hast den Lösungsweg auf die neue Aufgabe übertragen.',
   'Du hast dir gemerkt, worauf du achten musst.',
   'Diesmal hast du es auf Anhieb gelöst.',
-  'Du hast es so gerechnet wie im Lösungsweg.',
+  'Du hast es so gemacht wie im Lösungsweg.',
   'Du hast daran gedacht, was vorhin knifflig war.',
 ] as const;
 

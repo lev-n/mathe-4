@@ -36,7 +36,8 @@ const testSkill: SkillDef = {
       praise: 'Du hast die Kernaufgabe genutzt.',
       srText: `Wie viel ist ${a} mal ${b}?`,
       kmk: ['ZO.kopfrechnen'],
-      factKey: `${Math.min(a, b)}x${Math.max(a, b)}`,
+      // an Einmaleins fact on Stufe 1 only (facts are tracked one by one; Stufe 2 and 3 behave like other skills)
+      ...(stufe === 1 ? { factKey: `${Math.min(a, b)}x${Math.max(a, b)}` } : {}),
     };
   },
 };
@@ -734,10 +735,11 @@ describe('PracticePage: improvements in the round summary', () => {
   it('an error overcome on a later day: shown first and emphasised, with its badge, only after the round', async () => {
     roundState.size = 5;
     // Earlier (another day) the child made the "one row too many" mistake in this skill (tracking needs the skill entry).
-    practised();
+    practised(2);
     const st = store.get();
     store.importJson(serializeState({ ...st, growth: { ...st.growth, errors: { 'kopfrechnen.test': { 'one-more': { day: '2000-01-01', seen: 2, run: 0 } } } } }));
-    await startSkillRound();
+    render(<PracticePage plan={{ mode: 'skill', skillId: 'kopfrechnen.test', stufe: 2 }} onExit={vi.fn()} onNavigate={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Prüfen' });
     for (let i = 0; i < 5; i++) {
       answer(String(solution()));
       prufen();

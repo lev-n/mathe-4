@@ -372,6 +372,7 @@
   background: var(--surface-2);
 }
 .pr-improved__line.is-big { border-color: var(--ok); background: var(--ok-soft); font-weight: 650; }
+.pr-improved__head { display: block; }
 
 .pr-badges__title { margin: 0 0 var(--space-2); }
 .pr-badges__list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }

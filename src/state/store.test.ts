@@ -179,14 +179,39 @@ describe('corrupt or unknown stored data is ignored safely', () => {
     s.recordAnswer(ev());
     expect(storage.data.get(STORAGE_KEY)).toBe(text);
     expect(storage.writes).toBe(0);
-    // honest: the UI must not claim that progress is saved
-    expect(s.getSaveStatus()).toBe('failed');
+    // honest: the UI must not claim that progress is saved, and it can name the reason
+    expect(s.getSaveStatus()).toBe('newer');
     // "Fortschritt löschen" is an explicit choice to delete what is stored: then saving works again
     s.reset();
     expect(stored(storage)).toMatchObject({ version: 3, totals: { answered: 0 } });
     s.recordAnswer(ev());
     expect(stored(storage).totals.answered).toBe(1);
     expect(s.getSaveStatus()).toBe('ok');
+  });
+
+  it('saving never gets stuck: when another tab removes the newer document or writes a valid one, this tab saves again', () => {
+    const newer = JSON.stringify({ ...JSON.parse(serializeState(emptyState())), version: 4 });
+    const { data, tabs } = sharedTabs(2);
+    data.set(STORAGE_KEY, newer);
+    const a = createStore(tabs[0].storage, tabs[0].events);
+    const b = createStore(tabs[1].storage, tabs[1].events);
+    expect(a.getConsent()).toBe('denied');
+    // B deletes the progress ("Fortschritt löschen") and opts in again, then answers
+    b.reset();
+    b.setConsent('granted');
+    b.recordAnswer(ev());
+    expect(a.getConsent()).toBe('granted');
+    a.recordAnswer(ev());
+    a.recordAnswer(ev());
+    expect(a.getSaveStatus()).toBe('ok');
+    expect(JSON.parse(data.get(STORAGE_KEY)!).totals.answered).toBe(3);
+    // "Nicht mehr merken" also frees a tab that only saw the newer document
+    data.set(STORAGE_KEY, newer);
+    const c = createStore(tabs[0].storage);
+    c.forget();
+    c.setConsent('granted');
+    c.recordAnswer(ev());
+    expect(c.getSaveStatus()).toBe('ok');
   });
 
   it('a document stored by v1 (with session ids) is migrated on load and saved without them', () => {
@@ -594,7 +619,7 @@ describe('export / import', () => {
     source.recordAnswer(ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '4x8', latencyMs: 2500 }));
     // improvement tracking: an error-library tag and a missed Einmaleins fact
     source.recordAnswer(ev({ firstTry: false, bugTags: ['abrunden'], bugIds: ['abrunden'] }));
-    source.recordAnswer(ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '6x7', firstTry: false }));
+    source.recordAnswer(ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '6x7', firstTry: false, purpose: 'review' }));
     source.recordBlitz(9);
     source.updateSettings({ subtractionMethod: 'ergaenzen', weeklyGoal: 4 });
   });
@@ -665,7 +690,7 @@ describe('export / import', () => {
 
   it('the export contains aggregates only (no free text, no names)', () => {
     const file = JSON.parse(source.exportJson());
-    expect(Object.keys(file).sort()).toEqual(['app', 'badges', 'blitzBest', 'days', 'facts', 'growth', 'lastPlayed', 'settings', 'skills', 'totals', 'version']);
+    expect(Object.keys(file).sort()).toEqual(['app', 'badges', 'blitzBest', 'days', 'facts', 'growth', 'lastPlayed', 'reviewed', 'settings', 'skills', 'totals', 'version']);
     expect(file.lastPlayed).toEqual({ skillId: expect.any(String), stufe: expect.any(Number) });
     expect(Object.keys(file.lastPlayed).sort()).toEqual(['skillId', 'stufe']);
   });

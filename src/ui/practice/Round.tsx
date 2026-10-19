@@ -23,7 +23,7 @@ import ConsentPrompt from './ConsentPrompt';
 import ItemView from './ItemView';
 import PracticeHeader from './PracticeHeader';
 import RoundSummary, { ImprovedNotes, NewBadges, type MasteryLine, type SummaryNote } from './RoundSummary';
-import { afterPracticeAnnouncement, isBigNote, noteText, spokenText, summaryAnnouncement } from './growthText';
+import { afterPracticeAnnouncement, isBigNote, noteParts, spokenText, summaryAnnouncement } from './growthText';
 import WorkedExample from './WorkedExample';
 import {
   EFFORT_PHRASES,
@@ -443,9 +443,12 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     const events: GrowthEvent[] = outcomes.current.flatMap(({ outcome }) => outcome?.growth ?? []);
     const titleOf = (id: string) => skillMap.get(id)?.title ?? id;
     const notes: SummaryNote[] = roundNotes(finished, events).map((n, i) => {
-      const text = noteText(n, titleOf, method);
-      const spoken = spokenText(text);
-      return spoken ? { key: `${n.kind}-${i}`, text, spoken, big: isBigNote(n) } : { key: `${n.kind}-${i}`, text, big: isBigNote(n) };
+      const { head, text } = noteParts(n, titleOf, method);
+      const note: SummaryNote = { key: `${n.kind}-${i}`, text, big: isBigNote(n) };
+      if (head) note.head = head;
+      const spoken = spokenText(head ? `${head}: ${text}` : text);
+      if (spoken) note.spoken = spoken;
+      return note;
     });
     const badges = new Map<string, BadgeDef>();
     for (const { outcome } of outcomes.current) outcome?.newBadges.forEach((b) => badges.set(b.id, b));

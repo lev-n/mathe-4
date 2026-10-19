@@ -93,10 +93,13 @@ export default function PrivacyPage() {
           <li>je Einmaleins-Aufgabe: wie oft sie geübt und richtig gelöst wurde, Wiederholungsstufe und nächster Wiederholungstag,</li>
           <li>
             für die Abzeichen fürs Besserwerden: je Übungsbereich und Stufe, wie viele der ersten 10 Aufgaben im ersten Versuch
-            gelöst wurden und bei wie vielen etwas danebenging, das beste Ergebnis von 10 Aufgaben danach, der Tag, an dem zuletzt
-            eine Aufgabe danebenging, und wie oft sie später in der Wiederholung klappte; je Übungsbereich, welche typischen
-            Fehlerarten vorkamen (zum Beispiel „Übertrag vergessen“), wie oft sie danach vermieden wurden und der Tag dazu; je
-            Einmaleins-Aufgabe der Tag, an dem sie zuletzt danebenging (jeweils nur das Datum, ohne Uhrzeit),
+            gelöst wurden und bei wie vielen etwas danebenging, der Tag, an dem diese ersten 10 Aufgaben vollständig waren, ob sie
+            aus einem älteren Lernstand übernommen wurden, das beste Ergebnis von 10 Aufgaben danach, wie viele Aufgaben an
+            späteren Tagen im ersten Versuch klappten, der Tag, an dem zuletzt eine Aufgabe danebenging, ob „Besser geworden“
+            schon erkannt wurde und wie oft etwas später in der Wiederholung klappte; je Übungsbereich, welche typischen
+            Fehlerarten vorkamen (zum Beispiel „Übertrag vergessen“), in wie vielen Aufgaben, wie oft sie danach vermieden wurden,
+            der Tag, an dem sie zuletzt vorkamen, und der Tag, an dem sie überwunden wurden; je Einmaleins-Aufgabe der Tag, an
+            dem sie zuletzt danebenging (jeweils nur das Datum, ohne Uhrzeit),
           </li>
           <li>Übungstage und die Zahl der Wiederholungen am selben Tag (nur das Datum, ohne Uhrzeit),</li>
           <li>welche Übung und Stufe zuletzt geübt wurde (für „Weiter üben“, ohne Datum und Uhrzeit),</li>

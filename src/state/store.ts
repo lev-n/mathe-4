@@ -147,7 +147,7 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
         // Quota exceeded, private mode or blocked storage: keep working from memory.
       }
     }
-    saveStatus = ok ? 'ok' : 'failed';
+    saveStatus = newerStored ? 'newer' : ok ? 'ok' : 'failed';
   }
 
   /** Another tab changed (or removed) the stored document. */
@@ -161,6 +161,8 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
       return;
     }
     const parsed = text === null ? null : parseText(text, isKnownBadge);
+    // Only while a newer version's document is actually stored: removed or replaced by a valid one, saving works again.
+    newerStored = parsed !== null && !parsed.ok && parsed.error === 'newer-version';
     if (parsed?.ok) {
       // The other tab has consent and the newest progress. Every change made here was written and
       // taken over there as well, so nothing of this tab's saved progress is lost.
@@ -169,7 +171,6 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
       saveStatus = 'ok';
       emit();
     } else {
-      if (parsed?.error === 'newer-version') newerStored = true;
       if (consent === 'granted') {
         // Removed in another tab ("Nicht mehr merken", "Fortschritt löschen" removes first) or written
         // by a newer app version: never write it back from here. Progress of this visit stays in memory.
@@ -298,6 +299,7 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
 
     forget() {
       removeStored();
+      newerStored = false;
       consent = 'denied';
       saveStatus = 'ok';
       emit();

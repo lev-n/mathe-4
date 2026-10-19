@@ -234,7 +234,7 @@ function SettingsSection() {
   return (
     <section aria-labelledby="settings-title" className="settings">
       <h2 id="settings-title">Einstellungen</h2>
-      {consent === 'granted' && saveStatus === 'failed' ? (
+      {consent === 'granted' && saveStatus !== 'ok' ? (
         <p className="notice" data-testid="settings-status">
           <span>Die Einstellungen gelten sofort. {SAVE_FAILED_ADULT}</span>
         </p>
@@ -465,7 +465,13 @@ export function StorageSection() {
       <div className="status-box" data-testid="storage-status">
         {consent === 'granted' ? (
           <>
-            {saveStatus === 'failed' ? (
+            {saveStatus === 'newer' ? (
+              <p>
+                <strong>{SAVE_FAILED_ADULT}</strong> Auf diesem Gerät ist Fortschritt aus einer neueren Version von Mathe 4
+                gespeichert. Er wird hier nicht überschrieben. Laden Sie die Seite neu, oder löschen Sie ihn mit „Fortschritt
+                löschen“, damit wieder gespeichert wird.
+              </p>
+            ) : saveStatus === 'failed' ? (
               <p>
                 <strong>{SAVE_FAILED_ADULT}</strong> Der Browser lässt das Speichern nicht zu (zum Beispiel im privaten Modus
                 oder wenn der Speicher voll ist). Mit „Fortschritt sichern“ können Sie ihn in einer Datei aufbewahren.

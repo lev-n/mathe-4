@@ -24,7 +24,8 @@ function grownState(): ProgressState {
   const events = [
     ev({ day: '2026-10-21', firstTry: false, bugTags: ['abrunden-1', 'aufgerundet'], bugIds: ['abrunden-1'] }),
     ev({ day: '2026-10-22', bugTags: ['abrunden'] }),
-    ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '4x6', firstTry: false, day: '2026-10-22' }),
+    // a fact miss in a review arms its lasting improvement
+    ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '4x6', firstTry: false, day: '2026-10-22', purpose: 'review' }),
   ];
   for (const e of events) s = applyGrowth(s, applyAnswer(s, e).state, e, e.day).state;
   return s;
@@ -206,8 +207,8 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     expect(r.state.growth).toEqual({
       stufen: {
         // still 'geuebt': its misses count (more answers than the window, so it is not the real start: carried)
-        'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15' },
-        'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16' },
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15', missCarried: true },
+        'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16', missCarried: true },
         // 'sicher': a closed window without misses, so old (or help-only) misses never turn into rewards
         'geometrie.umfang#1': { earlyN: 10, earlyOk: 10, earlyWrong: 0, earlyDay: '2026-10-12', after: 0 },
         'schriftlich.addition#2': { earlyN: 10, earlyOk: 9, earlyWrong: 0, earlyDay: '2026-10-17', carried: true, after: 0 },
@@ -229,7 +230,8 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, level: 'sicher', carried: true }]);
     // and its seeded miss (on the last v2 day) is kept in a review days later
     const review = s.recordAnswer(ev({ day: '2026-10-20', purpose: 'review' }));
-    expect(review.growth).toEqual([{ kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 5 }]);
+    // the seeded miss day is only an upper bound: the event says so ("Früher …")
+    expect(review.growth).toEqual([{ kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 5, carried: true }]);
   });
 
   it('invalid v2 entries stay invalid (the seeding never repairs them)', () => {
@@ -242,14 +244,14 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
 
   it('a v2 document that already carries a growth field (not from us) is seeded from its skills instead', () => {
     const r = parseDocument({ ...v2(), growth: { stufen: { 'zahlen.runden#1': { earlyN: 10, earlyOk: 0, earlyWrong: 10, after: 10, improved: true, kept: 9 } }, errors: {}, facts: {} } });
-    expect(r.ok && r.state.growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15' });
+    expect(r.ok && r.state.growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15', missCarried: true });
   });
 
   it('a v1 document is migrated through v2 to v3', () => {
     const v1 = { ...v2(), version: 1, skills: { 'zahlen.runden#2': { attempts: 1, recent: [false], sessions: ['a'], state: 'geuebt', box: 0, checks: [], last: '2026-10-16' } } };
     const r = parseDocument(v1);
     expect(r.ok && r.state.version).toBe(3);
-    expect(r.ok && r.state.growth.stufen).toEqual({ 'zahlen.runden#2': { earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: '2026-10-16' } });
+    expect(r.ok && r.state.growth.stufen).toEqual({ 'zahlen.runden#2': { earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: '2026-10-16', missCarried: true } });
   });
 
   it('round trip keeps the growth data exactly', () => {

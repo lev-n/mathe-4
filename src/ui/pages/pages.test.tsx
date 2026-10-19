@@ -336,7 +336,7 @@ describe('ProgressPage: "So hast du dich verbessert"', () => {
     expect(linesOf(growth)).toEqual([
       'Stufe 1: Am Anfang 4 von 10 auf Anhieb, später 9 von 10.',
       'Stufe 2: Am Anfang 4 von 10 auf Anhieb – jetzt ist die Stufe „Sicher“.',
-      'Stufe 2: In der Wiederholung hast du auf Anhieb gelöst, was ein paar Tage vorher noch knifflig war.',
+      'Stufe 2: In der Wiederholung hast du auf Anhieb gelöst, was vorher noch knifflig war.',
     ]);
     // Stellenwerte got worse: nothing is said about it.
     expect(growth.textContent).not.toContain('Stellenwerte');
@@ -441,6 +441,15 @@ describe('Legal pages', () => {
       expect(text, needle).toContain(needle);
     }
     expect(screen.getAllByText(OPERATOR_PLACEHOLDER).length).toBeGreaterThan(0);
+  });
+
+  it('Datenschutz: names the data of the improvement badges (days only, error types, Einmaleins misses)', () => {
+    render(<PrivacyPage />);
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('für die Abzeichen fürs Besserwerden');
+    expect(text).toContain('typischen Fehlerarten');
+    expect(text).toContain('je Einmaleins-Aufgabe der Tag, an dem sie zuletzt danebenging');
+    expect(text).toContain('nur das Datum, ohne Uhrzeit');
   });
 
   it('Datenschutz: localStorage rests on the § 25 Abs. 2 Nr. 2 TDDDG exemption only, never on consent (P1/P2)', () => {

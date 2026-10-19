@@ -29,8 +29,8 @@ export function errorPhrase(tag: string, method: SubtractionMethod = 'abziehen')
 
 const TIMES_WORD: Record<number, string> = { 5: 'fünfmal', 6: 'sechsmal', 7: 'siebenmal', 8: 'achtmal', 9: 'neunmal', 10: 'zehnmal' };
 
-/** A prepositional object ('an alle Rechenschritte') reads better after "jetzt fünfmal". */
-const PREPOSITION = /^(an|auf|mit|in|zu|bei|für) /;
+/** A prepositional object ('an alle Rechenschritte') or one with "auch" reads better after "jetzt fünfmal". */
+const PREPOSITION = /^(an|auf|mit|in|zu|bei|für|auch) /;
 
 /**
  * 'Du hast den Übertrag jetzt fünfmal richtig beachtet.' / 'Du hast jetzt fünfmal an alle Rechenschritte gedacht.'
@@ -49,8 +49,8 @@ export function factLabel(factKey: string): string {
 }
 
 /**
- * When the miss was, as a phrase that stays true when the miss day is only an upper bound (progress migrated from
- * an older version stores the last practice day instead of the miss day): 'Vor ein paar Tagen', …
+ * When the miss was, for a miss day the app saw itself: 'Vor ein paar Tagen', … (a miss day taken over from older
+ * saved progress is only an upper bound; those notes say "Früher" instead, see noteParts).
  */
 export function agoPhrase(days: number): string {
   if (days >= 14) return 'Vor ein paar Wochen';
@@ -78,31 +78,51 @@ function fromTo(early: number, carried: boolean | undefined, now: string, nowIsC
   return `${start} ${of10(early)} auf Anhieb${nowIsCount ? ', ' : ' – '}${now}.`;
 }
 
-/** One line of "Das hast du verbessert". `title` gives the skill's title; `method` is the child's subtraction method. */
-export function noteText(note: RoundNote, title: (skillId: string) => string, method: SubtractionMethod = 'abziehen'): string {
+/** A note of "Das hast du verbessert": `head` names the skill (or the Einmaleins task), `text` what the child did. */
+export interface NoteParts {
+  head?: string;
+  text: string;
+}
+
+/**
+ * One line of "Das hast du verbessert". `title` gives the skill's title; `method` is the child's subtraction method.
+ * The title is kept apart from the sentence (titles can end in "?" or contain commas).
+ */
+export function noteParts(note: RoundNote, title: (skillId: string) => string, method: SubtractionMethod = 'abziehen'): NoteParts {
+  const skillHead = (n: { skillId: string; stufe: Stufe }) => `${title(n.skillId)} – ${stufeLabel(n.stufe)}`; // not "·": that is read as "mal"
   switch (note.kind) {
-    case 'behalten':
+    case 'behalten': {
+      const ago = note.carried ? 'Früher' : agoPhrase(note.days);
       return note.factKey
-        ? `${factLabel(note.factKey)}: ${agoPhrase(note.days)} war das noch knifflig. Heute hast du es in der Wiederholung auf Anhieb gewusst.`
-        : `${title(note.skillId)}, ${stufeLabel(note.stufe)}: ${agoPhrase(note.days)} war das noch knifflig. Heute hast du so eine Aufgabe in der Wiederholung auf Anhieb gelöst.`;
-    case 'fakten':
-      return `${fmt(note.count)} Einmaleins-Aufgaben waren ${lower(agoPhrase(note.days))} noch knifflig. Heute hast du sie in der Wiederholung auf Anhieb gewusst.`;
-    case 'besser': {
-      const head = `${title(note.skillId)}, ${stufeLabel(note.stufe)}: `;
-      return note.recent !== undefined
-        ? head + fromTo(note.early, note.carried, `jetzt ${of10(note.recent)}`, true)
-        : head + fromTo(note.early, note.carried, levelPhrase(note.level ?? 'sicher'), false);
+        ? { head: factLabel(note.factKey), text: `${ago} war das noch knifflig. Heute hast du es in der Wiederholung auf Anhieb gewusst.` }
+        : { head: skillHead(note), text: `${ago} war das noch knifflig. Heute hast du so eine Aufgabe in der Wiederholung auf Anhieb gelöst.` };
     }
+    case 'fakten':
+      return { text: `${fmt(note.count)} Einmaleins-Aufgaben waren ${lower(agoPhrase(note.days))} noch knifflig. Heute hast du sie in der Wiederholung auf Anhieb gewusst.` };
+    case 'besser':
+      return {
+        head: skillHead(note),
+        text:
+          note.recent !== undefined
+            ? fromTo(note.early, note.carried, `jetzt ${of10(note.recent)}`, true)
+            : fromTo(note.early, note.carried, levelPhrase(note.level ?? 'sicher'), false),
+      };
     case 'fehler':
-      return `${title(note.skillId)}: ${overcomeSentence(note.tag, note.run, 'jetzt ', method)}`;
+      return { head: title(note.skillId), text: overcomeSentence(note.tag, note.run, 'jetzt ', method) };
     case 'zwilling':
-      return note.count === 1
-        ? 'Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst.'
-        : `Nach dem Lösungsweg hast du ${fmt(note.count)} ähnliche Aufgaben auf Anhieb gelöst.`;
+      return {
+        text:
+          note.count === 1
+            ? 'Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst.'
+            : `Nach den Lösungswegen hast du ${fmt(note.count)} ähnliche Aufgaben auf Anhieb gelöst.`,
+      };
     case 'selbst':
-      return note.count === 1
-        ? 'Bei einer Aufgabe hast du deine Antwort im zweiten Versuch selbst verbessert.'
-        : `Bei ${fmt(note.count)} Aufgaben hast du deine Antwort im zweiten Versuch selbst verbessert.`;
+      return {
+        text:
+          note.count === 1
+            ? 'Bei einer Aufgabe hast du deine Antwort im zweiten Versuch selbst verbessert.'
+            : `Bei ${fmt(note.count)} Aufgaben hast du deine Antwort im zweiten Versuch selbst verbessert.`,
+      };
   }
 }
 
@@ -129,8 +149,8 @@ export function growthViewLines(view: SkillGrowthView, method: SubtractionMethod
     if (s.kept > 0) {
       add(
         s.kept === 1
-          ? `${head}In der Wiederholung hast du auf Anhieb gelöst, was ein paar Tage vorher noch knifflig war.`
-          : `${head}In der Wiederholung hast du schon ${fmt(s.kept)}-mal auf Anhieb gelöst, was ein paar Tage vorher noch knifflig war.`,
+          ? `${head}In der Wiederholung hast du auf Anhieb gelöst, was vorher noch knifflig war.`
+          : `${head}In der Wiederholung hast du schon ${fmt(s.kept)}-mal auf Anhieb gelöst, was vorher noch knifflig war.`,
       );
     }
   }

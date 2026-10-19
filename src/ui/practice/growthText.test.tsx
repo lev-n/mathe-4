@@ -5,13 +5,14 @@ import { IMPROVEMENT_BANNED_PHRASES } from '../../core/testing';
 import { BADGES } from '../../state/badges';
 import type { RoundNote, SkillGrowthView } from '../../state/growth';
 import { ERROR_FAMILIES } from '../../topics/errorFamilies';
-import { afterPracticeAnnouncement, agoPhrase, growthViewLines, noteText, overcomeSentence, spokenText, summaryAnnouncement } from './growthText';
+import { afterPracticeAnnouncement, agoPhrase, growthViewLines, noteParts, overcomeSentence, spokenText, summaryAnnouncement, type NoteParts } from './growthText';
 import { EFFORT_PHRASES, TWIN_SOLVED_PHRASES } from './phrases';
 import { ImprovedNotes } from './RoundSummary';
 
 afterEach(cleanup);
 
 const title = (id: string) => ({ 'zahlen.runden': 'Runden', 'schriftlich.addition': 'Schriftlich addieren' })[id] ?? id;
+const line = (p: NoteParts) => (p.head ? `${p.head}: ${p.text}` : p.text);
 
 const NOTES: RoundNote[] = [
   { kind: 'behalten', skillId: 'zahlen.runden', stufe: 2, days: 4 },
@@ -30,23 +31,41 @@ const NOTES: RoundNote[] = [
 
 describe('round notes ("Das hast du verbessert")', () => {
   it('name what the child did, compared only with their own earlier answers', () => {
-    expect(NOTES.map((n) => noteText(n, title))).toEqual([
-      'Runden, Stufe 2: Vor ein paar Tagen war das noch knifflig. Heute hast du so eine Aufgabe in der Wiederholung auf Anhieb gelöst.',
+    expect(NOTES.map((n) => line(noteParts(n, title)))).toEqual([
+      'Runden – Stufe 2: Vor ein paar Tagen war das noch knifflig. Heute hast du so eine Aufgabe in der Wiederholung auf Anhieb gelöst.',
       '3 · 7: Vor mehr als einer Woche war das noch knifflig. Heute hast du es in der Wiederholung auf Anhieb gewusst.',
       '3 Einmaleins-Aufgaben waren vor ein paar Tagen noch knifflig. Heute hast du sie in der Wiederholung auf Anhieb gewusst.',
-      'Runden, Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10.',
-      'Runden, Stufe 1: Am Anfang 5 von 10 auf Anhieb – jetzt ist die Stufe „Sicher“.',
-      'Runden, Stufe 1: Am Anfang war das noch knifflig – jetzt 8 von 10 auf Anhieb.',
-      'Runden, Stufe 3: Früher 3 von 10 auf Anhieb, jetzt 8 von 10.',
+      'Runden – Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10.',
+      'Runden – Stufe 1: Am Anfang 5 von 10 auf Anhieb – jetzt ist die Stufe „Sicher“.',
+      'Runden – Stufe 1: Am Anfang war das noch knifflig – jetzt 8 von 10 auf Anhieb.',
+      'Runden – Stufe 3: Früher 3 von 10 auf Anhieb, jetzt 8 von 10.',
       'Schriftlich addieren: Du hast den Übertrag jetzt fünfmal richtig beachtet.',
       'Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst.',
-      'Nach dem Lösungsweg hast du 2 ähnliche Aufgaben auf Anhieb gelöst.',
+      'Nach den Lösungswegen hast du 2 ähnliche Aufgaben auf Anhieb gelöst.',
       'Bei einer Aufgabe hast du deine Antwort im zweiten Versuch selbst verbessert.',
       'Bei 4 Aufgaben hast du deine Antwort im zweiten Versuch selbst verbessert.',
     ]);
   });
 
-  it('time phrases stay true when the miss day is only an upper bound (migrated progress)', () => {
+  it('keeps the skill title apart from the sentence (titles can end in "?" or contain commas)', () => {
+    const odd = (id: string) => ({ 'kopfrechnen.kopf-schriftlich': 'Kopf oder schriftlich?', 'kopfrechnen.mal-durch-zehn': 'Mal und durch 10, 100, 1000' })[id] ?? id;
+    expect(noteParts({ kind: 'besser', skillId: 'kopfrechnen.kopf-schriftlich', stufe: 2, early: 4, recent: 9 }, odd)).toEqual({
+      head: 'Kopf oder schriftlich? – Stufe 2',
+      text: 'Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10.',
+    });
+    expect(noteParts({ kind: 'fehler', skillId: 'kopfrechnen.mal-durch-zehn', stufe: 1, tag: 'nullen', run: 5 }, odd)).toEqual({
+      head: 'Mal und durch 10, 100, 1000',
+      text: 'Du hast die Nullen jetzt fünfmal richtig gesetzt.',
+    });
+  });
+
+  it('a lasting improvement measured from a miss day taken over from older progress says "Früher"', () => {
+    expect(noteParts({ kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 4, carried: true }, title).text).toBe(
+      'Früher war das noch knifflig. Heute hast du so eine Aufgabe in der Wiederholung auf Anhieb gelöst.',
+    );
+  });
+
+  it('time phrases for a miss day the app saw itself', () => {
     expect([3, 6, 7, 8, 13, 14, 40].map(agoPhrase)).toEqual([
       'Vor ein paar Tagen',
       'Vor ein paar Tagen',
@@ -64,6 +83,7 @@ describe('round notes ("Das hast du verbessert")', () => {
     expect(overcomeSentence('entbuendeln', 5, 'jetzt ', 'ergaenzen')).toBe('Du hast das Erweitern mit der gemerkten 1 jetzt fünfmal richtig gemacht.');
     expect(overcomeSentence('unbekannt')).toBe('Du hast die knifflige Stelle in diesen Aufgaben jetzt fünfmal richtig gelöst.');
     expect(overcomeSentence('uebertrag', 5, '')).toBe('Du hast den Übertrag fünfmal richtig beachtet.');
+    expect(overcomeSentence('quadrate')).toBe('Du hast jetzt fünfmal auch die großen Quadrate mitgezählt.');
   });
 
   it('every family sentence is a grammatical "Du hast …" sentence without traps, for both methods', () => {
@@ -91,9 +111,9 @@ describe('progress view lines ("So hast du dich verbessert")', () => {
     expect(growthViewLines(view)).toEqual([
       'Stufe 1: Am Anfang 4 von 10 auf Anhieb, später 9 von 10.',
       'Stufe 2: Am Anfang war das noch knifflig – jetzt ist die Stufe „Gemeistert“.',
-      'Stufe 2: In der Wiederholung hast du auf Anhieb gelöst, was ein paar Tage vorher noch knifflig war.',
+      'Stufe 2: In der Wiederholung hast du auf Anhieb gelöst, was vorher noch knifflig war.',
       'Stufe 3: Früher 2 von 10 auf Anhieb, später 8 von 10.',
-      'Stufe 3: In der Wiederholung hast du schon 3-mal auf Anhieb gelöst, was ein paar Tage vorher noch knifflig war.',
+      'Stufe 3: In der Wiederholung hast du schon 3-mal auf Anhieb gelöst, was vorher noch knifflig war.',
       'Du hast den Übertrag fünfmal richtig beachtet.',
       // two unknown tags share the fallback: said once
       'Du hast die knifflige Stelle in diesen Aufgaben fünfmal richtig gelöst.',
@@ -110,14 +130,15 @@ describe('screen readers', () => {
   });
 
   it('a fact note is read as "3 mal 7", not "3 Punkt 7"; the shown text stays "3 · 7"', () => {
-    const text = noteText(NOTES[1], title);
-    const spoken = spokenText(text)!;
+    const parts = noteParts(NOTES[1], title);
+    const spoken = spokenText(line(parts))!;
     expect(spoken).toMatch(/^3 mal 7: /);
-    expect(spokenText(noteText(NOTES[0], title))).toBeUndefined();
-    render(<ImprovedNotes notes={[{ key: 'f', text, spoken, big: true }]} />);
+    expect(spokenText(line(noteParts(NOTES[0], title)))).toBeUndefined();
+    render(<ImprovedNotes notes={[{ key: 'f', ...parts, spoken, big: true }]} />);
     const item = screen.getByRole('listitem');
-    expect(item.querySelector('[aria-hidden="true"]')!.textContent).toBe(text);
-    expect(item.querySelector('.visually-hidden')!.textContent).toBe(spoken);
+    expect(item.querySelector('[aria-hidden="true"]')!.textContent).toBe(`${parts.head}: ${parts.text}`);
+    expect(item.querySelector('[aria-hidden="true"] strong')!.textContent).toBe('3 · 7');
+    expect(item.querySelector(':scope > .visually-hidden')!.textContent).toBe(spoken);
     expect(screen.getByRole('heading', { level: 3, name: 'Das hast du verbessert' })).toBeTruthy();
   });
 });
@@ -125,7 +146,7 @@ describe('screen readers', () => {
 describe('improvement wording never uses the traps of improvement praise', () => {
   it('notes, progress lines, badges and in-item lines', () => {
     const texts = [
-      ...NOTES.map((n) => noteText(n, title)),
+      ...NOTES.map((n) => line(noteParts(n, title))),
       ...growthViewLines({ stufen: [{ stufe: 1, window: { early: 4, best: 9 }, level: 'sicher', early: 4, kept: 2 }], overcome: ['uebertrag'] }),
       ...BADGES.filter((b) => b.improvement).flatMap((b) => [b.title, b.description]),
       ...TWIN_SOLVED_PHRASES,

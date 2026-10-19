@@ -94,11 +94,15 @@ export interface GrowthStufe {
   after: number;
   /** Most first-try correct among the last 10 once the windows did not overlap (never goes down). */
   best?: number;
+  /** First-try correct answers on days after the early window, capped at 3: "besser" needs later-day evidence. */
+  laterOk?: number;
   /**
    * Last day of a wrong attempt here while the Stufe was still being learned (not yet 'sicher') or that cost a
    * Leitner box. Einmaleins facts use Growth.facts instead.
    */
   miss?: Day;
+  /** `miss` was taken over from older saved progress: only an upper bound of the real day ("Früher …"). */
+  missCarried?: true;
   /** "Besser geworden" was detected (at most once per skill-Stufe). */
   improved?: true;
   /** Lasting improvements here: once-missed tasks solved first try in a spaced review days later. */
@@ -120,7 +124,7 @@ export interface ErrorTrack {
 export interface Growth {
   /** key `${skillId}#${stufe}` */
   stufen: Record<string, GrowthStufe>;
-  /** skillId → tag → track, at most 8 tags per skill. */
+  /** skillId → tag (a misconception family, src/topics/errorFamilies.ts) → track, at most 12 tags per skill. */
   errors: Record<string, Record<string, ErrorTrack>>;
   /** Einmaleins fact ('3x7') → last day it was missed. */
   facts: Record<string, Day>;
@@ -137,7 +141,7 @@ export type GrowthEvent =
    */
   | { kind: 'besser'; skillId: string; stufe: Stufe; early: number; recent?: number; level?: 'sicher' | 'gemeistert'; carried?: true }
   /** Lasting improvement: a once-missed task type solved first try in a spaced review `days` after the miss. */
-  | { kind: 'behalten'; skillId: string; stufe: Stufe; days: number; factKey?: string };
+  | { kind: 'behalten'; skillId: string; stufe: Stufe; days: number; factKey?: string; carried?: true };
 
 export interface ProgressState {
   version: 3;
@@ -179,9 +183,10 @@ export interface ProgressState {
 
 /**
  * Result of the last write to storage while consent is 'granted': 'failed' when storage is missing,
- * blocked or full (progress then lives in memory only and is lost on reload).
+ * blocked or full; 'newer' when a newer app version's progress is stored and is not overwritten from here
+ * (progress then lives in memory only and is lost on reload; "Fortschritt löschen" frees the storage).
  */
-export type SaveStatus = 'ok' | 'failed';
+export type SaveStatus = 'ok' | 'failed' | 'newer';
 
 export type RoundPurpose = 'practice' | 'mixed' | 'review' | 'twin' | 'blitz';
 
@@ -215,9 +220,9 @@ export interface AnswerEvent {
   day: Day;
   /** Optional NRW extra: does not count toward badges. */
   optional?: boolean;
-  /** Ids of the exercise's bugs (the typical errors it offers; normalised to tags by src/state/growth.ts). */
+  /** Error-library tags the exercise offers (misconception families, src/topics/errorFamilies.ts tagsFor). */
   bugTags?: string[];
-  /** Ids of the known mistakes (matched Bugs) the child made in this item, at most 2. */
+  /** Tags of the known mistakes (matched Bugs) the child made in this item, at most 2. */
   bugIds?: string[];
   /**
    * At least one wrong attempt (not only help). Missing in older callers: then derived conservatively

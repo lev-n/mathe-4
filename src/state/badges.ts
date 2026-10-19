@@ -11,7 +11,8 @@
  * Improvement badges (docs/research.md M16, src/state/growth.ts) are the most significant ones: they reward
  * getting better than one's own earlier self, and each needs evidence from a later day or from a spaced
  * review, so answering wrong on purpose does not pay off. Small improvements (a 2nd try, a twin task) get
- * only a calm line in the round, never a badge.
+ * only a calm line in the round; only the older count-based 'Dranbleiber' badge counts tasks solved with 'Tipp' or
+ * on the 2nd try (an open decision, docs/research.md §7.2).
  */
 import { fmt } from '../core/format';
 import type { TopicId } from '../core/types';

@@ -2,7 +2,8 @@
  * Success-framed round summary (docs/research.md §6.1 step 6, M15): counts instead of stars for the round,
  * stars only for the mastery state of a Stufe, what the child improved compared with their own earlier answers
  * (M16, largest first), newly earned badges revealed calmly, and two equally weighted buttons. No autoplay into
- * the next round. This is the only place where badges and improvements appear after a round (never mid-round).
+ * the next round. Badges and improvements appear only after practice: here, or on the goodbye screen when the round
+ * ends at the break suggestion (never mid-round).
  */
 import type { MouseEvent, Ref } from 'react';
 import type { Stufe } from '../../core/types';
@@ -24,8 +25,10 @@ export interface MasteryLine {
 /** A line of "Das hast du verbessert" (text from growthText.noteText). */
 export interface SummaryNote {
   key: string;
+  /** The skill (or Einmaleins task) the note is about, shown in bold before the sentence. */
+  head?: string;
   text: string;
-  /** What a screen reader reads instead, when the text uses symbols ('3 · 7' → '3 mal 7'). */
+  /** What a screen reader reads instead of head and text, when they use symbols ('3 · 7' → '3 mal 7'). */
   spoken?: string;
   /** Kinds 3–5 (error overcome, skill improved, lasting improvement). */
   big: boolean;
@@ -42,16 +45,30 @@ export function ImprovedNotes({ notes }: { notes: readonly SummaryNote[] }) {
           <li key={n.key} className={`pr-improved__line${n.big ? ' is-big' : ''}`}>
             {n.spoken ? (
               <>
-                <span aria-hidden="true">{n.text}</span>
+                <span aria-hidden="true">
+                  <NoteContent note={n} />
+                </span>
                 <span className="visually-hidden">{n.spoken}</span>
               </>
             ) : (
-              n.text
+              <NoteContent note={n} />
             )}
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/** The head sits on its own line; a hidden colon keeps "Runden – Stufe 2: Am Anfang …" from running together when read. */
+function NoteContent({ note }: { note: SummaryNote }) {
+  return note.head ? (
+    <>
+      <strong className="pr-improved__head">{note.head}</strong>
+      {/[?!.:]$/.test(note.head) ? null : <span className="visually-hidden">:</span>} {note.text}
+    </>
+  ) : (
+    <>{note.text}</>
   );
 }
 
