@@ -3,7 +3,9 @@
  *
  * - Nothing is written to storage before setConsent('granted').
  * - On start, a valid 'mathe4.v1' document is loaded and consent counts as 'granted';
- *   otherwise consent is 'unknown' and progress lives in memory only.
+ *   otherwise consent is 'unknown' and progress lives in memory only. A document written by a newer app version
+ *   (e.g. after a rollback of the site) is never overwritten: consent is 'denied' and nothing is written until it is
+ *   gone ("Fortschritt löschen"), so the newer version finds its progress again.
  * - 'denied' keeps progress in memory for this visit (not persisted, asked again next visit).
  * - Every storage call is wrapped in try/catch (Safari private mode, quota, blocked storage):
  *   on failure the app keeps working from memory, and getSaveStatus() reports 'failed' so the UI
@@ -15,6 +17,7 @@
  */
 import { badgeById, evaluateBadges } from './badges';
 import { insertDay, isDay, today } from './dates';
+import { applyGrowth, emptyGrowth } from './growth';
 import { applyAnswer } from './mastery';
 import { IMPORT_MESSAGES, parseText, sanitizeSettingsPatch, serializeState } from './schema';
 import { DEFAULT_SETTINGS } from './types';
@@ -49,29 +52,35 @@ export interface Store {
 
 export function emptyState(): ProgressState {
   return {
-    version: 2,
+    version: 3,
     skills: {},
     facts: {},
     days: [],
     badges: {},
-    totals: { answered: 0, firstTry: 0, afterHint: 0, rounds: 0, checksPassed: 0 },
+    totals: { answered: 0, firstTry: 0, rounds: 0, checksPassed: 0 },
+    growth: emptyGrowth(),
     settings: { ...DEFAULT_SETTINGS },
   };
 }
 
 const isKnownBadge = (id: string) => badgeById(id) !== undefined;
 
-/** Reads and validates the stored document; null if absent, unreadable or invalid. */
-export function loadFromStorage(storage: Storage | null): ProgressState | null {
-  if (!storage) return null;
+/** The stored document: its state if it is valid, and whether a newer app version wrote it. */
+function readStored(storage: Storage | null): { state: ProgressState | null; newer: boolean } {
+  if (!storage) return { state: null, newer: false };
   try {
     const text = storage.getItem(STORAGE_KEY);
-    if (text === null) return null;
+    if (text === null) return { state: null, newer: false };
     const parsed = parseText(text, isKnownBadge);
-    return parsed.ok ? parsed.state : null;
+    return parsed.ok ? { state: parsed.state, newer: false } : { state: null, newer: parsed.error === 'newer-version' };
   } catch {
-    return null;
+    return { state: null, newer: false };
   }
+}
+
+/** Reads and validates the stored document; null if absent, unreadable or invalid. */
+export function loadFromStorage(storage: Storage | null): ProgressState | null {
+  return readStored(storage).state;
 }
 
 /**
@@ -114,9 +123,11 @@ export interface StorageEvents {
  * @param events where 'storage' events from other tabs arrive (window in the browser).
  */
 export function createStore(storage: Storage | null, events: StorageEvents | null = null): Store {
-  const loaded = loadFromStorage(storage);
+  const { state: loaded, newer } = readStored(storage);
   let state: ProgressState = loaded ?? emptyState();
-  let consent: Consent = loaded ? 'granted' : 'unknown';
+  let consent: Consent = loaded ? 'granted' : newer ? 'denied' : 'unknown';
+  /** A newer app version's document is in storage: never write over it. */
+  let newerStored = newer;
   let saveStatus: SaveStatus = 'ok';
   let persistRequested = false;
   const listeners = new Set<() => void>();
@@ -128,7 +139,7 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
   function save(): void {
     if (consent !== 'granted') return;
     let ok = false;
-    if (storage) {
+    if (storage && !newerStored) {
       try {
         storage.setItem(STORAGE_KEY, serializeState(state));
         ok = true;
@@ -136,7 +147,7 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
         // Quota exceeded, private mode or blocked storage: keep working from memory.
       }
     }
-    saveStatus = ok ? 'ok' : 'failed';
+    saveStatus = newerStored ? 'newer' : ok ? 'ok' : 'failed';
   }
 
   /** Another tab changed (or removed) the stored document. */
@@ -150,6 +161,8 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
       return;
     }
     const parsed = text === null ? null : parseText(text, isKnownBadge);
+    // Only while a newer version's document is actually stored: removed or replaced by a valid one, saving works again.
+    newerStored = parsed !== null && !parsed.ok && parsed.error === 'newer-version';
     if (parsed?.ok) {
       // The other tab has consent and the newest progress. Every change made here was written and
       // taken over there as well, so nothing of this tab's saved progress is lost.
@@ -157,12 +170,14 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
       consent = 'granted';
       saveStatus = 'ok';
       emit();
-    } else if (consent === 'granted') {
-      // Removed in another tab ("Nicht mehr merken", "Fortschritt löschen" removes first) or written
-      // by a newer app version: never write it back from here. Progress of this visit stays in memory.
-      consent = 'denied';
-      saveStatus = 'ok';
-      emit();
+    } else {
+      if (consent === 'granted') {
+        // Removed in another tab ("Nicht mehr merken", "Fortschritt löschen" removes first) or written
+        // by a newer app version: never write it back from here. Progress of this visit stays in memory.
+        consent = 'denied';
+        saveStatus = 'ok';
+        emit();
+      }
     }
   }
   if (events) {
@@ -234,13 +249,15 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
     recordAnswer(event) {
       const day = validDay(event.day);
       const applied = applyAnswer(state, event, day);
-      if (!applied.counted) return { before: applied.before, after: applied.after, newBadges: [], suggestNextStufe: false };
-      let next = applied.state;
+      if (!applied.counted) return { before: applied.before, after: applied.after, newBadges: [], suggestNextStufe: false, growth: [] };
+      // Improvements are measured against the child's own earlier answers (docs/research.md M16).
+      const grown = applyGrowth(state, applied.state, event, day);
+      let next = grown.state;
       let newBadges: BadgeDef[] = [];
       // Optional NRW extras never earn badges.
       if (!event.optional) ({ state: next, badges: newBadges } = withNewBadges(next, day));
       commit(next);
-      return { before: applied.before, after: applied.after, newBadges, suggestNextStufe: applied.suggestNextStufe };
+      return { before: applied.before, after: applied.after, newBadges, suggestNextStufe: applied.suggestNextStufe, growth: grown.events };
     },
 
     recordRound(round) {
@@ -273,13 +290,16 @@ export function createStore(storage: Storage | null, events: StorageEvents | nul
     },
 
     reset() {
-      // Remove first so old progress is gone even if writing the empty state fails.
-      if (consent === 'granted') removeStored();
+      // Remove first so old progress is gone even if writing the empty state fails. "Fortschritt löschen" also
+      // removes a newer version's document (the adult chose to delete the progress on this device).
+      if (consent === 'granted' || newerStored) removeStored();
+      newerStored = false;
       commit({ ...emptyState(), settings: state.settings });
     },
 
     forget() {
       removeStored();
+      newerStored = false;
       consent = 'denied';
       saveStatus = 'ok';
       emit();

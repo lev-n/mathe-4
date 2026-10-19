@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BANNED_PHRASES } from '../core/testing';
 import { applyAnswer } from './mastery';
-import { IMPORT_MESSAGES, MAX_IMPORT_CHARS, MIGRATIONS, migrate, migrateV1toV2, parseDocument, parseSettings, parseText, sanitizeSettingsPatch, serializeState, validateState } from './schema';
+import { applyGrowth, seedGrowth } from './growth';
+import { IMPORT_MESSAGES, MAX_IMPORT_CHARS, MIGRATIONS, migrate, migrateV1toV2, migrateV2toV3, parseDocument, parseSettings, parseText, sanitizeSettingsPatch, serializeState, validateState } from './schema';
 import type { Migration } from './schema';
-import { emptyState } from './store';
+import { createStore, emptyState } from './store';
 import { ev } from './testkit';
 import { DEFAULT_SETTINGS } from './types';
 import type { ProgressState } from './types';
@@ -15,6 +16,19 @@ function richState(): ProgressState {
   s = applyAnswer(s, ev({ skillId: 'zahlen.binaer', optional: true, day: '2026-10-20' })).state;
   s = applyAnswer(s, ev({ purpose: 'review', day: '2026-10-20' })).state;
   return { ...s, badges: { 'zahlen-sicher': '2026-10-19' }, blitzBest: 17, settings: { ...s.settings, weeklyGoal: 4, nrwExtras: true } };
+}
+
+/** richState() with improvement tracking in every part of `growth`. */
+function grownState(): ProgressState {
+  let s = richState();
+  const events = [
+    ev({ day: '2026-10-21', firstTry: false, bugTags: ['abrunden-1', 'aufgerundet'], bugIds: ['abrunden-1'] }),
+    ev({ day: '2026-10-22', bugTags: ['abrunden'] }),
+    // a fact miss in a review arms its lasting improvement
+    ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '4x6', firstTry: false, day: '2026-10-22', purpose: 'review' }),
+  ];
+  for (const e of events) s = applyGrowth(s, applyAnswer(s, e).state, e, e.day).state;
+  return s;
 }
 
 const doc = (state: ProgressState) => JSON.parse(serializeState(state)) as Record<string, unknown>;
@@ -50,7 +64,7 @@ describe('serialisation round trip', () => {
   it('writes the app marker and the version', () => {
     const d = doc(emptyState());
     expect(d.app).toBe('mathe4');
-    expect(d.version).toBe(2);
+    expect(d.version).toBe(3);
   });
 
   it('accepts a document without the app marker if it looks like a state', () => {
@@ -87,12 +101,12 @@ describe('migrate', () => {
     expect(migrate({ version: 0 }, {}, 1)).toEqual({ ok: false, error: 'invalid' });
   });
 
-  it('the current schema (v2) needs no migration; unknown older versions are ignored safely', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
+  it('the current schema (v3) needs no migration; unknown older versions are ignored safely', () => {
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2']);
     const d = doc(richState());
     expect(migrate(d)).toEqual({ ok: true, data: d });
     expect(parseDocument({ ...d, version: 0 })).toEqual({ ok: false, error: 'invalid' });
-    expect(parseDocument({ ...d, version: 3 })).toEqual({ ok: false, error: 'newer-version' });
+    expect(parseDocument({ ...d, version: 4 })).toEqual({ ok: false, error: 'newer-version' });
   });
 });
 
@@ -117,12 +131,13 @@ describe('v1 → v2: session ids are replaced by a count', () => {
     const r = parseText(JSON.stringify(v1()), (id) => id !== 'wochenziel');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.version).toBe(2);
+    expect(r.state.version).toBe(3);
     expect(r.state.skills['zahlen.runden#1']).toEqual({ attempts: 12, recent: Array(10).fill(true), practiceDays: 3, state: 'sicher', sicherSince: '2026-10-01', box: 2, due: '2026-10-20', checks: [true], last: '2026-10-17' });
     expect(r.state.skills['geometrie.umfang#2'].practiceDays).toBe(1);
     expect(r.state.facts).toEqual(v1().facts);
     expect(r.state.badges).toEqual({ 'zahlen-sicher': '2026-10-01' });
-    expect(r.state.totals).toEqual(v1().totals);
+    // the count behind the removed 'Dranbleiber' badge is dropped
+    expect(r.state.totals).toEqual({ answered: 13, firstTry: 11, rounds: 2, checksPassed: 1 });
     expect(r.state.blitzBest).toBe(4);
     expect(r.state.settings.weeklyGoal).toBe(2);
     const saved = serializeState(r.state);
@@ -156,6 +171,181 @@ describe('v1 → v2: session ids are replaced by a count', () => {
     const text = JSON.stringify(v1()).replace('"skills":{', '"skills":{"__proto__":{"attempts":1,"recent":[],"sessions":["a"],"state":"geuebt","box":0,"checks":[]},');
     expect(parseText(text)).toEqual({ ok: false, error: 'invalid' });
     expect(Object.keys(migrateV1toV2(JSON.parse(text)).skills as object)).toContain('__proto__');
+  });
+});
+
+describe('v2 → v3: improvement tracking is added and seeded conservatively', () => {
+  /** A document as v2 stored it (no `growth`). */
+  const v2 = () => ({
+    app: 'mathe4',
+    version: 2,
+    skills: {
+      // still 'geuebt' with a full window of 10: the early window starts from it, it ended on `last`
+      'zahlen.runden#1': { attempts: 14, recent: [false, false, false, true, true, true, false, true, true, false], practiceDays: 2, state: 'geuebt', box: 0, checks: [], last: '2026-10-15' },
+      // 'geuebt' with 3 answers: the window keeps filling
+      'zahlen.runden#2': { attempts: 3, recent: [true, true, false], practiceDays: 1, state: 'geuebt', box: 0, checks: [], last: '2026-10-16' },
+      // 'sicher' without a miss in recent: nothing to seed
+      'geometrie.umfang#1': { attempts: 10, recent: Array(10).fill(true), practiceDays: 2, state: 'sicher', sicherSince: '2026-10-10', box: 1, due: '2026-10-11', checks: [], last: '2026-10-12' },
+      // 'sicher' with a miss in recent: only the miss (on `last` or earlier)
+      'schriftlich.addition#2': { attempts: 12, recent: [true, false, true, true, true, true, true, true, true, true], practiceDays: 3, state: 'sicher', sicherSince: '2026-10-12', box: 2, due: '2026-10-20', checks: [true], last: '2026-10-17' },
+    },
+    facts: { '3x7': { box: 2, due: '2026-10-20', seen: 4, correct: 3 } },
+    days: ['2026-10-12', '2026-10-15', '2026-10-16', '2026-10-17'],
+    badges: { 'zahlen-sicher': '2026-10-12' },
+    totals: { answered: 39, firstTry: 30, afterHint: 2, rounds: 4, checksPassed: 1 },
+    settings: { ...DEFAULT_SETTINGS, weeklyGoal: 2 },
+  });
+
+  it('a stored v2 document loads as v3; everything v2 had stays the same, except the count behind the removed Dranbleiber badge', () => {
+    const r = parseText(JSON.stringify(v2()));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.version).toBe(3);
+    expect(r.state.skills).toEqual(v2().skills);
+    expect(r.state.facts).toEqual(v2().facts);
+    expect(r.state.badges).toEqual(v2().badges);
+    // the count behind the removed 'Dranbleiber' badge is dropped
+    expect(r.state.totals).toEqual({ answered: 39, firstTry: 30, rounds: 4, checksPassed: 1 });
+    expect(r.state.growth).toEqual({
+      stufen: {
+        // still 'geuebt': its misses count (more answers than the window, so it is not the real start: carried)
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15', missCarried: true },
+        'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16', missCarried: true },
+        // 'sicher': a closed window without misses, so old (or help-only) misses never turn into rewards
+        'geometrie.umfang#1': { earlyN: 10, earlyOk: 10, earlyWrong: 0, earlyDay: '2026-10-12', after: 0 },
+        'schriftlich.addition#2': { earlyN: 10, earlyOk: 9, earlyWrong: 0, earlyDay: '2026-10-17', carried: true, after: 0 },
+      },
+      errors: {},
+      facts: {},
+    });
+    expect(migrateV2toV3(v2())).toEqual({ ...v2(), version: 3 });
+  });
+
+  it('migrated progress keeps working: the seeded start and miss of a Geübt entry lead to later improvements', () => {
+    const s = createStore(null);
+    expect(s.importJson(JSON.stringify(v2()))).toEqual({ ok: true });
+    // a 'sicher' entry from v2 gives no reward for its old misses
+    const old = s.recordAnswer(ev({ skillId: 'schriftlich.addition', topicId: 'schriftlich', stufe: 2, purpose: 'review', day: '2026-10-20' }));
+    expect(old.growth).toEqual([]);
+    // the seeded early window (5 of 10, 5 misses) of a 'geuebt' entry is a hard start: three blocks of at least 9 of 10
+    // on later days (two of them) are "besser"
+    const day = (d: string) => Array.from({ length: 10 }, () => s.recordAnswer(ev({ day: d })).growth).flat();
+    const seen = [...day('2026-10-18'), ...day('2026-10-18'), ...day('2026-10-19')];
+    expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, recent: 10, carried: true }]);
+    // and its seeded miss (on the last v2 day) is kept in a review days later
+    const review = s.recordAnswer(ev({ day: '2026-10-20', purpose: 'review' }));
+    // the seeded miss day is only an upper bound: the event says so ("Früher …")
+    expect(review.growth).toEqual([{ kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 5, carried: true }]);
+  });
+
+  it('invalid v2 entries stay invalid (the seeding never repairs them)', () => {
+    const d = v2();
+    (d.skills['zahlen.runden#1'] as Record<string, unknown>).recent = ['ja'];
+    expect(parseDocument(d)).toEqual({ ok: false, error: 'invalid' });
+    const text = JSON.stringify(v2()).replace('"skills":{', '"skills":{"__proto__":{"attempts":1,"recent":[false],"practiceDays":1,"state":"geuebt","box":0,"checks":[],"last":"2026-10-16"},');
+    expect(parseText(text)).toEqual({ ok: false, error: 'invalid' });
+  });
+
+  it('a v2 document that already carries a growth field (not from us) is seeded from its skills instead', () => {
+    const r = parseDocument({ ...v2(), growth: { stufen: { 'zahlen.runden#1': { earlyN: 10, earlyOk: 0, earlyWrong: 10, after: 10, improved: true, kept: 9 } }, errors: {}, facts: {} } });
+    expect(r.ok && r.state.growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15', missCarried: true });
+  });
+
+  it('a v1 document is migrated through v2 to v3', () => {
+    const v1 = { ...v2(), version: 1, skills: { 'zahlen.runden#2': { attempts: 1, recent: [false], sessions: ['a'], state: 'geuebt', box: 0, checks: [], last: '2026-10-16' } } };
+    const r = parseDocument(v1);
+    expect(r.ok && r.state.version).toBe(3);
+    expect(r.ok && r.state.growth.stufen).toEqual({ 'zahlen.runden#2': { earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: '2026-10-16', missCarried: true } });
+  });
+
+  it('round trip keeps the growth data exactly', () => {
+    const s = grownState();
+    expect(Object.keys(s.growth.errors)).toEqual(['zahlen.runden']);
+    expect(s.growth.facts).toEqual({ '4x6': '2026-10-22' });
+    const r = parseText(serializeState(s));
+    expect(r.ok && r.state).toEqual(s);
+  });
+});
+
+describe('validation of the improvement tracking: derived data never makes stored progress unloadable', () => {
+  const base = () => doc(grownState());
+  type G = { stufen: Record<string, Record<string, unknown>>; errors: Record<string, Record<string, Record<string, unknown>>>; facts: Record<string, unknown> };
+  const g = (d: Record<string, unknown>) => d.growth as G;
+  const stufe = (d: Record<string, unknown>) => g(d).stufen['zahlen.runden#1'];
+  const parsedGrowth = (d: Record<string, unknown>) => {
+    const r = parseDocument(d);
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error('not ok');
+    // everything else is untouched
+    expect(r.state.skills).toEqual(grownState().skills);
+    expect(r.state.badges).toEqual(grownState().badges);
+    return r.state.growth;
+  };
+
+  it('a missing or broken growth is rebuilt from the skills', () => {
+    for (const bad of [undefined, null, [], 'kaputt', 3]) {
+      const d = base();
+      d.growth = bad;
+      expect(parsedGrowth(d), String(bad)).toEqual(seedGrowth(grownState().skills));
+    }
+  });
+
+  const dropped: Array<[string, (d: Record<string, unknown>) => unknown, (gr: ReturnType<typeof parsedGrowth>) => void]> = [
+    ['stufen missing', (d) => delete (d.growth as Record<string, unknown>).stufen, (gr) => expect(gr.stufen).toEqual({})],
+    ['a bad skill key', (d) => (g(d).stufen['zahlen.runden#7'] = stufe(d)), (gr) => expect(gr.stufen['zahlen.runden#7']).toBeUndefined()],
+    ['an entry without a skill entry (orphan)', (d) => (g(d).stufen['geometrie.flaeche#2'] = stufe(d)), (gr) => expect(gr.stufen['geometrie.flaeche#2']).toBeUndefined()],
+    ['earlyN not a count', (d) => (stufe(d).earlyN = 'zehn'), (gr) => expect(gr.stufen['zahlen.runden#1']).toBeUndefined()],
+    ['after negative', (d) => (stufe(d).after = -1), (gr) => expect(gr.stufen['zahlen.runden#1']).toBeUndefined()],
+    ['after above 10 (clamped)', (d) => (stufe(d).after = 11), (gr) => expect(gr.stufen['zahlen.runden#1'].after).toBe(10)],
+    ['earlyOk above earlyN (clamped)', (d) => (stufe(d).earlyOk = 99), (gr) => expect(gr.stufen['zahlen.runden#1'].earlyOk).toBe(gr.stufen['zahlen.runden#1'].earlyN)],
+    ['miss not a day (field dropped)', (d) => (stufe(d).miss = 20261019), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('miss')],
+    ['earlyDay while the window is not full (field dropped)', (d) => (stufe(d).earlyDay = '2026-10-19'), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('earlyDay')],
+    ['kept fractional (field dropped)', (d) => (stufe(d).kept = 1.5), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('kept')],
+    ['improved not true (field dropped)', (d) => (stufe(d).improved = '2026-10-19'), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('improved')],
+    ['later above the 8 blocks (clamped)', (d) => (stufe(d).later = 95), (gr) => expect(gr.stufen['zahlen.runden#1'].later).toBe(80)],
+    [
+      'run above 3 (clamped)',
+      (d) => Object.assign(stufe(d), { run: 7, runDay: '2026-10-19' }),
+      (gr) => expect(gr.stufen['zahlen.runden#1']).toMatchObject({ run: 3, runDay: '2026-10-19' }),
+    ],
+    [
+      'run without its day, or a day without a run (dropped together)',
+      (d) => Object.assign(stufe(d), { run: 2, runDay: 'gestern' }),
+      (gr) => {
+        expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('run');
+        expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('runDay');
+      },
+    ],
+    ['a run day without a run (dropped)', (d) => Object.assign(stufe(d), { run: 0, runDay: '2026-10-19' }), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('runDay')],
+    ['laterOk of the earlier kind-4 rule (ignored)', (d) => (stufe(d).laterOk = 3), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('laterOk')],
+    ['errors for an unknown topic', (d) => (g(d).errors['musik.noten'] = {}), (gr) => expect(gr.errors['musik.noten']).toBeUndefined()],
+    ['errors of a skill without entries', (d) => (g(d).errors['geometrie.flaeche'] = { x: { day: '2026-10-19', seen: 2, run: 5, done: '2026-10-20' } }), (gr) => expect(gr.errors['geometrie.flaeche']).toBeUndefined()],
+    ['errors not an object', (d) => (g(d).errors['zahlen.runden'] = [] as unknown as Record<string, Record<string, unknown>>), (gr) => expect(gr.errors['zahlen.runden']).toBeUndefined()],
+    ['a non-canonical fact key', (d) => (g(d).facts['6x4'] = '2026-10-19'), (gr) => expect(gr.facts).toEqual({ '4x6': '2026-10-22' })],
+    ['a fact miss that is not a day', (d) => (g(d).facts['4x6'] = true), (gr) => expect(gr.facts).toEqual({})],
+  ];
+
+  it.each(dropped)('%s → dropped or clamped, the rest loads', (_name, mutate, check) => {
+    const d = base();
+    mutate(d);
+    check(parsedGrowth(d));
+  });
+
+  it('tags are re-normalised, merged, trimmed or dropped', () => {
+    const d = base();
+    const errors = g(d).errors['zahlen.runden'];
+    errors['abrunden-3'] = { day: '2026-10-25', seen: 1, run: 2 }; // merges with 'abrunden' (later day, more evidence)
+    errors['ein tag'] = { day: '2026-10-19', seen: 1, run: 0 }; // dropped
+    errors.ohneTag = { seen: 1, run: 0 }; // no day: dropped
+    errors.kaputt = { day: '2026-10-19', seen: 1, run: 0, done: 'ja' }; // bad done: the field is dropped
+    errors.lauf = { day: '2026-10-19', seen: 7, run: 9 }; // clamped to the current limits
+    for (let i = 0; i < 14; i++) errors[`extra${'abcdefghijklmn'[i]}x`] = { day: `2026-09-${String(i + 1).padStart(2, '0')}`, seen: 1, run: 0 };
+    const tracks = parsedGrowth(d).errors['zahlen.runden'];
+    expect(Object.keys(tracks)).toHaveLength(12);
+    expect(tracks.abrunden).toEqual({ day: '2026-10-25', seen: 1, run: 2 });
+    expect(tracks.lauf).toEqual({ day: '2026-10-19', seen: 2, run: 5 });
+    expect(tracks.kaputt).toEqual({ day: '2026-10-19', seen: 1, run: 0 });
+    for (const gone of ['ein tag', 'ohneTag', 'abrunden-3', 'extraax']) expect(tracks[gone], gone).toBeUndefined();
   });
 });
 

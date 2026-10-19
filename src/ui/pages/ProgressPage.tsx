@@ -2,10 +2,12 @@ import { fmt } from '../../core/format';
 import type { TopicMeta, TopicModule } from '../../core/types';
 import { STUFEN } from '../../core/types';
 import { today } from '../../state/dates';
+import { growthView } from '../../state/growth';
 import { masteryOf, practisedTopics, starsOf, visibleSkills, weekProgress } from '../../state/selectors';
 import type { ProgressState } from '../../state/types';
 import { store } from '../../state/store';
 import { useConsent, useProgress, useSaveStatus } from '../../state/useProgress';
+import { GROWTH_VIEW_HEADING, growthViewLines } from '../practice/growthText';
 import { SAVE_FAILED_CHILD } from '../practice/phrases';
 import { TOPICS } from '../../topics/registry';
 import { useTopicModules } from '../app/hooks';
@@ -52,6 +54,40 @@ function TopicTable({ meta, mod, state }: { meta: TopicMeta; mod: TopicModule; s
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * "So hast du dich verbessert" (docs/research.md M16): per skill, only what got better compared with the
+ * child's own earlier answers (never a decline, never a comparison with others). Nothing is shown without improvement.
+ */
+function GrowthList({ meta, mod, state }: { meta: TopicMeta; mod: TopicModule; state: ProgressState }) {
+  const items = visibleSkills(state, mod.skills)
+    .map((skill) => {
+      const view = growthView(state, skill.id);
+      return view ? { skill, lines: growthViewLines(view, state.settings.subtractionMethod) } : null;
+    })
+    .filter((x): x is { skill: (typeof mod.skills)[number]; lines: string[] } => x !== null && x.lines.length > 0);
+  if (items.length === 0) return null;
+  return (
+    <div className="progress-growth">
+      <h3 className="progress-growth__title">
+        {GROWTH_VIEW_HEADING}
+        <span className="visually-hidden">: {meta.title}</span>
+      </h3>
+      <ul className="progress-growth__list">
+        {items.map(({ skill, lines }) => (
+          <li key={skill.id} className="progress-growth__skill">
+            <span className="progress-growth__name">{skill.title}</span>
+            <ul className="progress-growth__lines">
+              {lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -108,6 +144,7 @@ export default function ProgressPage() {
             ) : (
               <>
                 <TopicTable meta={t} mod={mod} state={state} />
+                <GrowthList meta={t} mod={mod} state={state} />
                 <p>
                   <Link to={topicPath(t.id)}>Weiter üben: {t.shortTitle}</Link>
                 </p>
@@ -119,7 +156,7 @@ export default function ProgressPage() {
 
       <section className="storage-note" aria-labelledby="storage-title">
         <h2 id="storage-title">Wo ist dein Fortschritt gespeichert?</h2>
-        {consent === 'granted' && saveStatus === 'failed' ? (
+        {consent === 'granted' && saveStatus !== 'ok' ? (
           <p>{SAVE_FAILED_CHILD}</p>
         ) : consent === 'granted' ? (
           <p>Dein Fortschritt ist nur auf diesem Gerät gespeichert. Nichts wird verschickt.</p>

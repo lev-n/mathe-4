@@ -32,7 +32,7 @@ export default function ConsentPrompt({ guard }: ConsentPromptProps) {
 
   if (answered) {
     // Never claim that progress is saved when the browser blocks storage (or it is full).
-    const failed = answered === 'granted' && consent === 'granted' && saveStatus === 'failed';
+    const failed = answered === 'granted' && consent === 'granted' && saveStatus !== 'ok';
     return (
       <p className="pr-consent pr-consent--done card" role="note" tabIndex={-1} ref={doneRef}>
         {failed

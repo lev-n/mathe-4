@@ -230,7 +230,7 @@ function weg(stufe: Stufe, rng: Rng): Exercise {
       [
         b < 100 && Number(`${a}${b}`) > gone && { id: 'null-fehlt', match: Number(`${a}${b}`) - gone, hint: `${mixed(a, 'km', b, 'm')}: Bei ${q(b, 'm')} brauchst du eine 0 als Platzhalter.` },
         a * 100 + b > gone && { id: 'faktor-100', match: a * 100 + b - gone, hint: '1\u00A0km hat 1000\u00A0m, nicht 100\u00A0m.' },
-        { id: 'addiert', match: total + gone, hint: `${who.name} ist schon ein Stück gegangen. Der Rest ist kürzer als der ganze Weg.` },
+        { id: 'weg-addiert', match: total + gone, hint: `${who.name} ist schon ein Stück gegangen. Der Rest ist kürzer als der ganze Weg.` },
         { id: 'gegangen', match: gone, hint: 'Das ist der Teil, der schon geschafft ist. Gefragt ist der Rest.' },
       ],
       rest,

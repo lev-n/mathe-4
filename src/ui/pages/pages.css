@@ -298,6 +298,14 @@
 .progress-topic__icon svg { width: 32px; height: 32px; }
 .progress-topic__empty { color: var(--text-muted); }
 
+/* "So hast du dich verbessert" (docs/research.md M16): gentle, positive lines per skill. */
+.progress-growth { margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-m); background: var(--ok-soft); }
+.progress-growth__title { margin: 0 0 var(--space-2); font-size: var(--fs-body); }
+.progress-growth__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-3); }
+.progress-growth__name { font-weight: 700; }
+.progress-growth__lines { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
+.progress-growth__lines li + li { margin-top: var(--space-1); }
+
 .progress-table { width: 100%; border-collapse: collapse; margin-top: var(--space-3); font-size: var(--fs-small); }
 .progress-table th,
 .progress-table td { text-align: left; padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }

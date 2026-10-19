@@ -1,13 +1,16 @@
 /**
  * Success-framed round summary (docs/research.md §6.1 step 6, M15): counts instead of stars for the round,
- * stars only for the mastery state of a Stufe, newly earned badges revealed calmly, and two equally
- * weighted buttons. No autoplay into the next round.
+ * stars only for the mastery state of a Stufe, what the child improved compared with their own earlier answers
+ * (M16, largest first), newly earned badges revealed calmly, and two equally weighted buttons. No autoplay into
+ * the next round. Badges and improvements appear only after practice: here, or on the goodbye screen when the round
+ * ends at the break suggestion (never mid-round).
  */
 import type { MouseEvent, Ref } from 'react';
 import type { Stufe } from '../../core/types';
 import type { BadgeDef, MasteryState } from '../../state/types';
 import { MASTERY_STARS } from '../../state/selectors';
 import { MASTERY_LABEL } from '../app/labels';
+import { IMPROVED_HEADING } from './growthText';
 import { stufeLabel, summaryText } from './phrases';
 
 export interface MasteryLine {
@@ -19,10 +22,84 @@ export interface MasteryLine {
   levelUp: boolean;
 }
 
+/** A line of "Das hast du verbessert" (text from growthText.noteText). */
+export interface SummaryNote {
+  key: string;
+  /** The skill (or Einmaleins task) the note is about, shown in bold before the sentence. */
+  head?: string;
+  text: string;
+  /** What a screen reader reads instead of head and text, when they use symbols ('3 · 7' → '3 mal 7'). */
+  spoken?: string;
+  /** Kinds 3–5 (error overcome, skill improved, lasting improvement). */
+  big: boolean;
+}
+
+/** "Das hast du verbessert": shown after practice only (round summary, goodbye after a break), never mid-round. */
+export function ImprovedNotes({ notes }: { notes: readonly SummaryNote[] }) {
+  if (notes.length === 0) return null;
+  return (
+    <div className="pr-improved">
+      <h3 className="pr-improved__title">{IMPROVED_HEADING}</h3>
+      <ul className="pr-improved__list">
+        {notes.map((n) => (
+          <li key={n.key} className={`pr-improved__line${n.big ? ' is-big' : ''}`}>
+            {n.spoken ? (
+              <>
+                <span aria-hidden="true">
+                  <NoteContent note={n} />
+                </span>
+                <span className="visually-hidden">{n.spoken}</span>
+              </>
+            ) : (
+              <NoteContent note={n} />
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The head sits on its own line; a hidden colon keeps "Runden – Stufe 2: Am Anfang …" from running together when read. */
+function NoteContent({ note }: { note: SummaryNote }) {
+  return note.head ? (
+    <>
+      <strong className="pr-improved__head">{note.head}</strong>
+      {/[?!.:]$/.test(note.head) ? null : <span className="visually-hidden">:</span>} {note.text}
+    </>
+  ) : (
+    <>{note.text}</>
+  );
+}
+
+/** Newly earned badges, revealed calmly after practice. */
+export function NewBadges({ badges }: { badges: readonly BadgeDef[] }) {
+  if (badges.length === 0) return null;
+  return (
+    <div className="pr-badges">
+      <h3 className="pr-badges__title">{badges.length === 1 ? 'Neues Abzeichen' : 'Neue Abzeichen'}</h3>
+      <ul className="pr-badges__list">
+        {badges.map((b) => (
+          <li key={b.id} className="pr-badge">
+            <span className="pr-badge__icon" aria-hidden="true">
+              {b.icon}
+            </span>
+            <span className="pr-badge__text">
+              <strong>{b.title}</strong>
+              <span>{b.description}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export interface RoundSummaryProps {
   solved: number;
   answered: number;
   mastery: MasteryLine[];
+  notes?: SummaryNote[];
   badges: BadgeDef[];
   nextStufe: Stufe | null;
   onAgain: () => void;
@@ -49,6 +126,7 @@ export default function RoundSummary({
   solved,
   answered,
   mastery,
+  notes = [],
   badges,
   nextStufe,
   onAgain,
@@ -83,24 +161,8 @@ export default function RoundSummary({
         </ul>
       )}
 
-      {badges.length > 0 && (
-        <div className="pr-badges">
-          <h3 className="pr-badges__title">{badges.length === 1 ? 'Neues Abzeichen' : 'Neue Abzeichen'}</h3>
-          <ul className="pr-badges__list">
-            {badges.map((b) => (
-              <li key={b.id} className="pr-badge">
-                <span className="pr-badge__icon" aria-hidden="true">
-                  {b.icon}
-                </span>
-                <span className="pr-badge__text">
-                  <strong>{b.title}</strong>
-                  <span>{b.description}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ImprovedNotes notes={notes} />
+      <NewBadges badges={badges} />
 
       <div className="pr-pair no-print">
         <button type="button" className="btn btn--lg" onClick={act(onAgain)}>

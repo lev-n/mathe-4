@@ -26,7 +26,7 @@ export default function BadgesPage() {
       <PageTitle docTitle="Meine Abzeichen">Meine Abzeichen</PageTitle>
       {/* No hint at badges still to come: they arrive as a surprise, nothing to chase (docs/research.md M6/M8). */}
       <p className="lead">
-        Abzeichen zeigen, was du schon sicher kannst.{earned.length === 0 && ' Hier erscheinen sie, sobald du eines bekommst.'}
+        Abzeichen zeigen, was du schon sicher kannst und was du dazugelernt hast.{earned.length === 0 && ' Hier erscheinen sie, sobald du eines bekommst.'}
       </p>
       {earned.length > 0 && (
         <ul className="badge-list">

@@ -75,8 +75,82 @@ export const DEFAULT_SETTINGS: Settings = {
   keypad: 'auto',
 };
 
+/**
+ * Improvement tracking of one skill-Stufe (docs/research.md M16; src/state/growth.ts). Counts only: the early window
+ * is compared with StufeProgress.recent, so its sum is all that is needed.
+ */
+export interface GrowthStufe {
+  /** Answers in the early window (the first answers since tracking began, same purposes as `recent`), 0 … 10. */
+  earlyN: number;
+  /** Of them first-try correct. */
+  earlyOk: number;
+  /** Of them with a wrong attempt (help alone is not one): a hard start needs real mistakes. */
+  earlyWrong: number;
+  /** Day the early window became full. */
+  earlyDay?: Day;
+  /** The early window was taken over from older saved progress (v2) and is not the real start ("Früher …"). */
+  carried?: true;
+  /** Answers that fed `recent` after the early window was full, capped at 10 (10 = the two windows do not overlap). */
+  after: number;
+  /** Most first-try correct among the last 10 once the windows did not overlap (never goes down). */
+  best?: number;
+  /**
+   * After a hard start: answers that fed `recent` on days after the early window, until "besser" or the end of the
+   * blocks that can count (0 … 80). Every 10th closes a block of 10 (src/state/growth.ts kind 4).
+   */
+  later?: number;
+  /** Blocks of 10 in a row that met the bar (1 … 3, absent = none). */
+  run?: number;
+  /** Day the first block of the current run closed (set together with `run`). */
+  runDay?: Day;
+  /**
+   * Last day of a wrong attempt here while the Stufe was still being learned (not yet 'sicher') or that cost a
+   * Leitner box. Einmaleins facts use Growth.facts instead.
+   */
+  miss?: Day;
+  /** `miss` was taken over from older saved progress: only an upper bound of the real day ("Früher …"). */
+  missCarried?: true;
+  /** "Besser geworden" was detected (at most once per skill-Stufe). */
+  improved?: true;
+  /** Lasting improvements here: once-missed tasks solved first try in a spaced review days later. */
+  kept?: number;
+}
+
+/** An error-library tag (normalised Bug id) that happened in a skill. */
+export interface ErrorTrack {
+  /** Last day the error happened. */
+  day: Day;
+  /** Tasks in which it happened, capped at 2 (a single slip is not yet an error to overcome). */
+  seen: number;
+  /** Later tasks of the skill that offered this error and were solved first try in a row (0 … 5). */
+  run: number;
+  /** Day it was overcome (5 in a row, the last of them on a later day than the error). Never undone. */
+  done?: Day;
+}
+
+export interface Growth {
+  /** key `${skillId}#${stufe}` */
+  stufen: Record<string, GrowthStufe>;
+  /** skillId → tag (a misconception family, src/topics/errorFamilies.ts) → track, at most 12 tags per skill. */
+  errors: Record<string, Record<string, ErrorTrack>>;
+  /** Einmaleins fact ('3x7') → last day it was missed. */
+  facts: Record<string, Day>;
+}
+
+/** An improvement detected while recording one answer (types 3–5 of docs/research.md M16). */
+export type GrowthEvent =
+  /** Error overcome: a typical error did not happen again in 5 later tasks of the skill. */
+  | { kind: 'fehler'; skillId: string; stufe: Stufe; tag: string; run: number }
+  /**
+   * Skill improved after a hard start: `early` first-try correct of the first 10, `recent` of the last 10 (the block
+   * that completed the run); `carried` when the early window came from older saved progress ("Früher …").
+   */
+  | { kind: 'besser'; skillId: string; stufe: Stufe; early: number; recent: number; carried?: true }
+  /** Lasting improvement: a once-missed task type solved first try in a spaced review `days` after the miss. */
+  | { kind: 'behalten'; skillId: string; stufe: Stufe; days: number; factKey?: string; carried?: true };
+
 export interface ProgressState {
-  version: 2;
+  version: 3;
   /** key `${skillId}#${stufe}` */
   skills: Record<string, StufeProgress>;
   /** Einmaleins facts, key '3x7' (smaller factor first). */
@@ -88,8 +162,6 @@ export interface ProgressState {
   totals: {
     answered: number;
     firstTry: number;
-    /** solved on the 2nd try after a hint ("drangeblieben") */
-    afterHint: number;
     rounds: number;
     checksPassed: number;
   };
@@ -105,14 +177,17 @@ export interface ProgressState {
    * No time and no id (P1); review, mixed and Blitz answers leave it unchanged.
    */
   lastPlayed?: { skillId: string; stufe: Stufe };
+  /** Improvement tracking (docs/research.md M16). */
+  growth: Growth;
   settings: Settings;
 }
 
 /**
  * Result of the last write to storage while consent is 'granted': 'failed' when storage is missing,
- * blocked or full (progress then lives in memory only and is lost on reload).
+ * blocked or full; 'newer' when a newer app version's progress is stored and is not overwritten from here
+ * (progress then lives in memory only and is lost on reload; "Fortschritt löschen" frees the storage).
  */
-export type SaveStatus = 'ok' | 'failed';
+export type SaveStatus = 'ok' | 'failed' | 'newer';
 
 export type RoundPurpose = 'practice' | 'mixed' | 'review' | 'twin' | 'blitz';
 
@@ -146,6 +221,15 @@ export interface AnswerEvent {
   day: Day;
   /** Optional NRW extra: does not count toward badges. */
   optional?: boolean;
+  /** Error-library tags the exercise offers (misconception families, src/topics/errorFamilies.ts tagsFor). */
+  bugTags?: string[];
+  /** Tags of the known mistakes (matched Bugs) the child made in this item, at most 2. */
+  bugIds?: string[];
+  /**
+   * At least one wrong attempt (not only help). Missing in older callers: then derived conservatively
+   * from solved/firstTry/usedHint (src/state/growth.ts hadWrongAttempt).
+   */
+  wrongAttempt?: boolean;
 }
 
 export interface BadgeDef {
@@ -156,6 +240,8 @@ export interface BadgeDef {
   description: string;
   /** Single emoji used as the badge picture (aria-hidden; title is the accessible name). */
   icon: string;
+  /** Rewards getting better than one's own earlier self (docs/research.md M16), not mastery. */
+  improvement?: true;
 }
 
 export interface AnswerOutcome {
@@ -165,6 +251,8 @@ export interface AnswerOutcome {
   newBadges: BadgeDef[];
   /** 5 first-try correct in a row at this Stufe and Stufe < 3 → suggest the next Stufe. */
   suggestNextStufe: boolean;
+  /** Improvements detected by this answer (shown in the round summary only). */
+  growth: GrowthEvent[];
 }
 
 export interface ReviewItem {

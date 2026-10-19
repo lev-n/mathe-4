@@ -61,7 +61,8 @@ describe('kopfrechnen.stufenzahlen', () => {
     expect(bug(g, 'null-zu-viel')).toBe(5_000);
     const minus = plusMinus(7_300, '-', 400, 100, 2);
     expect(minus.answer).toMatchObject({ value: 6_900 });
-    expect(bug(minus, 'uebertrag-vergessen')).toBe(7_900);
+    expect(bug(minus, 'entbuendeln-vergessen')).toBe(7_900);
+    expect(bug(minus, 'uebertrag-vergessen')).toBeUndefined();
     expect(bug(minus, 'kleiner-minus-groesser')).toBe(7_100);
     const plus = plusMinus(45_000, '+', 5_000, 1000, 2);
     expect(bug(plus, 'uebertrag-vergessen')).toBe(40_000);
@@ -95,7 +96,7 @@ describe('kopfrechnen.stufenzahlen', () => {
 
   it('regroup bug in minus names what was forgotten', () => {
     const minus = plusMinus(1_100, '-', 300, 100, 1);
-    expect(minus.bugs?.find((b) => b.id === 'uebertrag-vergessen')).toMatchObject({ match: 1_800, hint: 'Du hast einen Tausender entbündelt. Dann ist bei den Tausendern einer weniger.' });
+    expect(minus.bugs?.find((b) => b.id === 'entbuendeln-vergessen')).toMatchObject({ match: 1_800, hint: 'Du hast einen Tausender entbündelt. Dann ist bei den Tausendern einer weniger.' });
   });
 });
 

@@ -41,6 +41,8 @@ export interface ItemMeta {
   factKey?: string;
   /** NRW extra: does not count toward badges. */
   optional?: boolean;
+  /** Error-library tags this exercise offers (misconception families, src/topics/errorFamilies.ts tagsFor). */
+  bugTags?: string[];
 }
 
 export interface ItemState {
@@ -63,6 +65,8 @@ export interface ItemState {
   firstCheckAt: number | null;
   /** A Zwillingsaufgabe was inserted because of this item. */
   twinInserted: boolean;
+  /** Ids of the known mistakes (matched Bugs) in this item, in order, at most 2. */
+  bugIds?: string[];
 }
 
 export interface FinishedItem {
@@ -79,6 +83,10 @@ export interface FinishedItem {
   factKey?: string;
   latencyMs?: number;
   optional?: boolean;
+  /** Error-library tags the exercise offered (ItemMeta.bugTags). */
+  bugTags?: string[];
+  /** Raw ids of the known mistakes (matched Bugs) in this item (1st and 2nd attempt); Round maps them to families. */
+  bugIds?: string[];
 }
 
 export type ExampleReason = 'intro' | 'again';
@@ -257,6 +265,8 @@ function finish(state: SessionState, item: ItemState, solved: boolean, twinOffse
   if (item.meta.factKey) record.factKey = item.meta.factKey;
   if (latency !== undefined) record.latencyMs = latency;
   if (item.meta.optional) record.optional = true;
+  if (item.meta.bugTags && item.meta.bugTags.length > 0) record.bugTags = [...item.meta.bugTags];
+  if (item.bugIds && item.bugIds.length > 0) record.bugIds = [...item.bugIds];
 
   const streak = firstTry ? state.streak + 1 : 0;
   const streakNote = firstTry && streak % STREAK_STEP === 0 ? streak : null;
@@ -359,6 +369,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         result,
         firstCheckAt: item.firstCheckAt ?? now,
       };
+      if (!result.correct && result.bugId && !(item.bugIds ?? []).includes(result.bugId)) checked.bugIds = [...(item.bugIds ?? []), result.bugId];
       if (result.correct) return finish(state, checked, true, action.twinOffset ?? 2);
       const wrongAttempts = item.wrongAttempts + 1;
       if (wrongAttempts >= 2) {

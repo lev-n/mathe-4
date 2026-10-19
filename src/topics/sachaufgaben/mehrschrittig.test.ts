@@ -28,6 +28,16 @@ describe('sachaufgaben.mehrschrittig specifics', () => {
     }
   });
 
+  it('Basketball: "every basket counts 2" has a word id (no index-like digit), next to "baskets counted"', () => {
+    const balls = samples(mehrschrittigSkill, 1).filter((e) => e.key.includes('basketball:'));
+    expect(balls.length).toBeGreaterThan(5);
+    for (const ex of balls) {
+      const m = ex.context!.match(/wirft \S+ (\d+) Körbe für je 2 Punkte\. Dazu wirft \S+ (\d+) Körbe/)!;
+      expect(ex.bugs?.find((b) => b.id === 'alle-zwei-punkte')?.match).toBe(2 * (num(m[1]) + num(m[2])));
+      expect(ex.bugs?.find((b) => b.id === 'koerbe')?.match).toBe(num(m[1]) + num(m[2]));
+    }
+  });
+
   it('Stufe 2: Preisliste and Fahrplan are recomputed from the table', () => {
     let list = 0;
     let plan = 0;

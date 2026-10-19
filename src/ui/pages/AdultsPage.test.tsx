@@ -86,7 +86,7 @@ function backup(days: string[] = ['2026-10-01']): string {
 const withProgress = (): ProgressState => ({
   ...emptyState(),
   days: ['2026-10-17'],
-  totals: { answered: 10, firstTry: 8, afterHint: 1, rounds: 1, checksPassed: 0 },
+  totals: { answered: 10, firstTry: 8, rounds: 1, checksPassed: 0 },
 });
 
 describe('Fortschritt sichern / laden / löschen', () => {

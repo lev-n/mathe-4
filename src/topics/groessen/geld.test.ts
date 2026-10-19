@@ -4,6 +4,7 @@ import { checkAnswer } from '../../core/check';
 import { createRng } from '../../core/rng';
 import { DEFAULT_CONTEXT } from '../../core/generate';
 import type { Exercise, Stufe } from '../../core/types';
+import { tagFor } from '../errorFamilies';
 import { describeMoney, fewestPieces, geldSkill } from './geld';
 import { checkConversion } from './step-check';
 
@@ -76,6 +77,26 @@ describe('groessen.geld specifics', () => {
       expect(ex.answer.value).toBe(best[cents]);
       expect(ex.knobel).toBe(true);
     }
+  });
+
+  it('fewest pieces: forgetting the Cent coins has its own Bug id, not the conversion id "nur-euro" (error families)', () => {
+    let fewest = 0;
+    let centCoins = 0;
+    for (const ex of samples(3, 600)) {
+      const ids = (ex.bugs ?? []).map((b) => b.id);
+      if (!ex.prompt.includes('möglichst wenigen')) continue;
+      fewest++;
+      expect(ids, ex.key).not.toContain('nur-euro');
+      if (ids.includes('cent-muenzen-vergessen')) centCoins++;
+    }
+    expect(fewest).toBeGreaterThan(50);
+    expect(centCoins).toBeGreaterThan(0);
+    // 'nur-euro' keeps one meaning: the Cent after the comma in '4,35 € = □ ct'
+    for (const stufe of [1, 2, 3] as Stufe[]) {
+      for (const bug of samples(stufe).flatMap((ex) => ex.bugs ?? [])) if (bug.id === 'nur-euro') expect(bug.hint).toMatch(/nach dem Komma/);
+    }
+    expect(tagFor('groessen.geld', 'cent-muenzen-vergessen')).toBe('stueckelung');
+    expect(tagFor('groessen.geld', 'nur-euro')).toBe('komma');
   });
 
   it('every conversion item matches an independent evaluation of the left side', () => {

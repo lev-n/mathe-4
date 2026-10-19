@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOX, TIMES } from '../../core/format';
 import type { Exercise, SkillDef, TopicModule } from '../../core/types';
 import { DEFAULT_SETTINGS, type RoundSlot } from '../../state/types';
-import { EXAMPLE_AGAIN_INTRO, EXAMPLE_INTRO, NORMALISING_PHRASES, UNCHANGED_ANSWER } from './phrases';
+import { serializeState } from '../../state/schema';
+import { EFFORT_PHRASES, EXAMPLE_AGAIN_INTRO, EXAMPLE_INTRO, NORMALISING_PHRASES, TWIN_SOLVED_PHRASES, UNCHANGED_ANSWER } from './phrases';
 import { resetPracticeVisit } from './visit';
 
 // ── Test doubles ────────────────────────────────────────────────────────────
@@ -35,7 +36,8 @@ const testSkill: SkillDef = {
       praise: 'Du hast die Kernaufgabe genutzt.',
       srText: `Wie viel ist ${a} mal ${b}?`,
       kmk: ['ZO.kopfrechnen'],
-      factKey: `${Math.min(a, b)}x${Math.max(a, b)}`,
+      // an Einmaleins fact on Stufe 1 only (facts are tracked one by one; Stufe 2 and 3 behave like other skills)
+      ...(stufe === 1 ? { factKey: `${Math.min(a, b)}x${Math.max(a, b)}` } : {}),
     };
   },
 };
@@ -679,6 +681,171 @@ describe('PracticePage: attempts, examples and focus', () => {
     fireEvent.click(within(pad).getByRole('button', { name: 'Prüfen' }));
     expect(screen.getByText('Richtig!')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Weiter' })).toBeTruthy();
+  });
+});
+
+describe('PracticePage: improvements in the round summary', () => {
+  /** The "Das hast du verbessert" block (a plain div under an h3, like the badges; no extra landmark). */
+  const improved = () => screen.queryByRole('heading', { level: 3, name: 'Das hast du verbessert' })?.closest<HTMLElement>('.pr-improved') ?? null;
+  const isEffort = (t: string) => (EFFORT_PHRASES as readonly string[]).includes(t);
+  const isTwinLine = (t: string) => (TWIN_SOLVED_PHRASES as readonly string[]).includes(t);
+  const praiseLines = () => [...document.querySelectorAll('.pr-item .pr-praise, .pr-item p')].map((p) => p.textContent ?? '');
+
+  it('small improvements (2nd try, twin task) get one calm line each; the summary announcement stays short', async () => {
+    practised();
+    await startSkillRound();
+    // 1: wrong once (bug hint), then right → 2nd try
+    const v = solution();
+    answer(String(v + firstFactor()));
+    prufen();
+    answer(String(v));
+    prufen();
+    weiter();
+    // 2: needs the solution → Zwillingsaufgabe at the end; 3: right
+    failItem();
+    weiter();
+    answer(String(solution()));
+    prufen();
+    weiter();
+    // the twin, first try: a calm in-item line, no badge, no pop-up
+    expect(screen.getByText('Eine ähnliche Aufgabe wie vorhin')).toBeTruthy();
+    answer(String(solution()));
+    prufen();
+    expect(praiseLines().some(isTwinLine)).toBe(true);
+    expect(improved()).toBeNull();
+    weiter();
+
+    const block = improved()!;
+    expect(within(block).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst.',
+      'Bei einer Aufgabe hast du deine Antwort im zweiten Versuch selbst verbessert.',
+    ]);
+    expect(block.querySelector('.is-big')).toBeNull();
+    // no extra landmark: the summary has its own region, the notes do not
+    expect(screen.queryByRole('region', { name: 'Das hast du verbessert' })).toBeNull();
+    expect(screen.queryByText('Neues Abzeichen')).toBeNull();
+    // short and complete: the child reads the notes under the focused heading
+    expect(live()).toBe('3 von 4 geschafft – 1 Aufgabe war noch knifflig. Darunter steht, was du verbessert hast.');
+    // the matched mistake is recorded as its error-library tag (no family for this test skill: the id itself)
+    const events = vi.mocked(store.recordAnswer).mock.calls.map((c) => c[0]);
+    expect(events[0]).toMatchObject({ bugTags: ['one-more'], bugIds: ['one-more'], wrongAttempt: true });
+    expect(events[2].bugIds).toBeUndefined();
+  });
+
+  it('an error overcome on a later day: shown first and emphasised, with its badge, only after the round', async () => {
+    roundState.size = 5;
+    // Earlier (another day) the child made the "one row too many" mistake in this skill (tracking needs the skill entry).
+    practised(2);
+    const st = store.get();
+    store.importJson(serializeState({ ...st, growth: { ...st.growth, errors: { 'kopfrechnen.test': { 'one-more': { day: '2000-01-01', seen: 2, run: 0 } } } } }));
+    render(<PracticePage plan={{ mode: 'skill', skillId: 'kopfrechnen.test', stufe: 2 }} onExit={vi.fn()} onNavigate={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Prüfen' });
+    for (let i = 0; i < 5; i++) {
+      answer(String(solution()));
+      prufen();
+      // never during the round: no badge, no improvement note, nothing announced about it
+      expect(document.body.textContent).not.toMatch(/Stolperstein|Abzeichen|verbessert/);
+      expect(live()).not.toMatch(/Abzeichen|verbessert/);
+      weiter();
+    }
+    const heading = screen.getByRole('heading', { level: 2, name: 'Runde geschafft' });
+    expect(document.activeElement).toBe(heading);
+    const lines = within(improved()!).getAllByRole('listitem');
+    expect(lines.map((li) => li.textContent)).toEqual(['Testeinmaleins: Du hast die knifflige Stelle in diesen Aufgaben jetzt fünfmal richtig gelöst.']);
+    expect(lines[0].className).toContain('is-big');
+    expect(screen.getByRole('heading', { level: 3, name: 'Neues Abzeichen' })).toBeTruthy();
+    expect(screen.getByText('Stolperstein überwunden')).toBeTruthy();
+    expect(live()).toBe('5 von 5 geschafft. Darunter steht, was du verbessert hast. Neues Abzeichen: Stolperstein überwunden.');
+    expect(store.get().badges['fehler-ueberwunden']).toBeDefined();
+    expect(vi.mocked(store.recordAnswer).mock.calls.every((c) => c[0].bugTags?.[0] === 'one-more')).toBe(true);
+  });
+
+  it('keyboard and reading order: heading (focused), counts, improvements, then the two equal buttons', async () => {
+    roundState.size = 1;
+    practised();
+    await startSkillRound();
+    // the whole item by keyboard: Enter checks (twice), focus then sits on Weiter
+    const v = solution();
+    answer(String(v + firstFactor()));
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    answer(String(v));
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    expect(screen.getByText('Richtig!')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Weiter' }));
+    weiter();
+    const summary = document.querySelector('.pr-summary')!;
+    expect(document.activeElement).toBe(within(summary as HTMLElement).getByRole('heading', { level: 2 }));
+    const block = improved()!;
+    // the notes are text only: nothing to tab through before the buttons
+    expect(block.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
+    const focusables = [...summary.querySelectorAll<HTMLElement>('button, a[href]')].map((b) => b.textContent);
+    expect(focusables).toEqual(['Noch eine Runde', 'Fertig für heute']);
+    const order = [summary.querySelector('h2'), summary.querySelector('.pr-summary__count'), block, summary.querySelector('.pr-pair')];
+    for (let i = 1; i < order.length; i++) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('caps the effort lines per round (wrong answers on purpose do not keep paying); the summary has one line', async () => {
+    roundState.size = 5;
+    practised();
+    await startSkillRound();
+    let acknowledged = 0;
+    for (let i = 0; i < 5; i++) {
+      const v = solution();
+      answer(String(v + firstFactor()));
+      prufen();
+      answer(String(v));
+      prufen();
+      if (praiseLines().some(isEffort)) acknowledged += 1;
+      weiter();
+    }
+    expect(acknowledged).toBe(3);
+    expect(within(improved()!).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Bei 5 Aufgaben hast du deine Antwort im zweiten Versuch selbst verbessert.']);
+    expect(store.get().badges).toEqual({});
+  });
+
+  it('leaving at the break suggestion: the goodbye screen shows what improved so far (after practice, not mid-round)', async () => {
+    roundState.size = 6;
+    practised();
+    await startSkillRound();
+    for (let i = 0; i < 3; i++) {
+      clock += 7 * 60 * 1000;
+      const v = solution();
+      answer(String(v + firstFactor()));
+      prufen();
+      answer(String(v));
+      prufen();
+      if (i < 2) weiter();
+    }
+    clock += 60 * 1000;
+    weiter();
+    expect(breakHeading()).toBeTruthy();
+    expect(improved()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause machen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fertig für heute' }));
+    const goodbye = screen.getByRole('heading', { level: 2, name: 'Super, dass du heute geübt hast. Bis zum nächsten Mal!' });
+    expect(document.activeElement).toBe(goodbye);
+    expect(within(improved()!).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Bei 3 Aufgaben hast du deine Antwort im zweiten Versuch selbst verbessert.']);
+    expect(live()).toBe('Super, dass du heute geübt hast. Bis zum nächsten Mal! Darunter steht, was du verbessert hast.');
+    // the round summary was skipped, so "Zur Übersicht" is the only action and comes after the notes
+    const button = screen.getByRole('button', { name: 'Zur Übersicht' });
+    expect(improved()!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('after the summary, "Fertig für heute" does not repeat the improvements', async () => {
+    roundState.size = 1;
+    practised();
+    await startSkillRound();
+    const v = solution();
+    answer(String(v + firstFactor()));
+    prufen();
+    answer(String(v));
+    prufen();
+    weiter();
+    expect(improved()).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Fertig für heute' }));
+    expect(screen.getByRole('heading', { name: 'Super, dass du heute geübt hast. Bis zum nächsten Mal!' })).toBeTruthy();
+    expect(improved()).toBeNull();
+    expect(live()).toBe('Super, dass du heute geübt hast. Bis zum nächsten Mal!');
   });
 });
 

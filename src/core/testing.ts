@@ -19,6 +19,15 @@ export const BANNED_PHRASES = [
   'weltklasse', 'zu langsam', 'so schnell', 'schon wieder', 'war doch einfach', 'alle anderen',
 ];
 
+/**
+ * Extra traps of improvement praise (docs/research.md M15 "Verbesserung", M16): pressure, inflation, comparison
+ * with others and error framing. Checked on every improvement text (round notes, progress view, badges).
+ */
+export const IMPROVEMENT_BANNED_PHRASES = [
+  ...BANNED_PHRASES,
+  'endlich', 'na also', 'besser als', 'andere kinder', 'viel besser', 'keine fehler', 'nie wieder', 'fehlerfrei',
+];
+
 const CONTEXTS: GenContext[] = [
   { subtractionMethod: 'abziehen', nrwExtras: false, today: '2026-10-19' },
   { subtractionMethod: 'ergaenzen', nrwExtras: true, today: '2026-10-19' },

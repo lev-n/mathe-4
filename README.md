@@ -29,7 +29,7 @@ An interactive math practice portal for 4th-grade students (Klasse 4, Grundschul
 - **Worked examples:** “So geht's” before a new Stufe, again after repeated difficulty.
 - **Mastery:** per skill and Stufe: *Geübt* (★) → *Sicher* (★★: 8 of the last 10 correct on the first try, including the last 3) → *Gemeistert* (★★★: confirmed by spaced reviews ≥ 3 days later). Nothing is locked; the app only suggests.
 - **Spaced review:** Leitner boxes (1, 3, 7, 14, 28 days) → “Heute wiederholen” (max. 8 items).
-- **Motivation without manipulation:** stars for mastery, competence badges (surprises, not announced), a gentle weekly goal (“Übungstage diese Woche”), an in-round “5 richtig hintereinander!”. **No** consecutive-day streaks (loss aversion), leaderboards, currencies, timers by default, sounds, pop-ups or guilt-tripping. An optional 2-minute *Blitzrunde* exists only if an adult enables it.
+- **Motivation without manipulation:** stars for mastery, competence badges (surprises, not announced), improvement badges that reward getting better than one's own earlier self (an error that no longer happens, a hard start followed by three blocks of 10 answers in a row on later days, each with at least 8 first try, a once-missed task solved in a review days later; shown only after practice in the round summary or on the goodbye screen, never mid-round, and they need evidence from a later day or a scheduled review, so wrong answers alone never earn them; see `docs/research.md` M16), a gentle weekly goal (“Übungstage diese Woche”), an in-round “5 richtig hintereinander!”. **No** consecutive-day streaks (loss aversion), leaderboards, currencies, timers by default, sounds, pop-ups or guilt-tripping. An optional 2-minute *Blitzrunde* exists only if an adult enables it.
 - **Worksheets:** printable sheets for teachers and parents (topic, skills, Stufe, 6/10/15 tasks), reproducible by sheet number, with an answer key on a separate page.
 
 ## Privacy (DSGVO) and accessibility
@@ -86,7 +86,7 @@ docs/research.md          research summary with sources and the finding → desi
 src/core/                 contracts (types.ts), seeded RNG, German formatting, parsing, checking, test suite
 src/data/curriculum.ts    KMK tags + Bayern/NRW alignment
 src/topics/<topic>/       one file per skill (pure generator) + tests; registry.ts lazy-loads topics
-src/state/                progress store (opt-in storage), mastery, Leitner review, badges, round builder
+src/state/                progress store (opt-in storage), mastery, Leitner review, badges, improvement detection (growth.ts), round builder
 src/ui/practice/          practice round: hints, feedback, worked solutions, summary, Blitzrunde
 src/ui/answers/           answer inputs (number, choice, multi, order, written columns, cells grid, number line)
 src/ui/visuals/           hand-written SVG visuals (Stellentafel, Zahlenstrahl, Uhr, Diagramme, Körper, Netze …)
@@ -112,7 +112,7 @@ The app has ~25 interactive components (written-calculation grids, a number-line
 
 - Content was checked by automated tests and AI review, not yet by practising teachers. A pilot with a class is the best next step (see `docs/research.md` §7).
 - Written division and some extras differ between the Länder: division is part of LehrplanPLUS Bayern but not of the KMK standards. NRW extras (Binärzahlen, Tonnen, × 3-stellig) are hidden unless enabled.
-- Progress lives on one device. Use “Fortschritt sichern/laden” to move it between devices.
+- Progress lives on one device and belongs to one child: Mathe 4 does not tell children apart, so siblings sharing a browser share one record (local profiles are a later step, `docs/research.md` §7.6). Use “Fortschritt sichern/laden” to move it between devices.
 
 ## Contributing
 

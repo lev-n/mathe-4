@@ -2,7 +2,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPERATOR_PLACEHOLDER } from '../../config/operator';
-import { BANNED_PHRASES } from '../../core/testing';
+import { BANNED_PHRASES, IMPROVEMENT_BANNED_PHRASES } from '../../core/testing';
 import type { TopicId } from '../../core/types';
 import { dueFacts, dueReviews, practisedTopics, weekProgress } from '../../state/selectors';
 import type { AnswerEvent, Consent, ProgressState } from '../../state/types';
@@ -292,6 +292,124 @@ describe('ProgressPage', () => {
   });
 });
 
+describe('ProgressPage: "So hast du dich verbessert"', () => {
+  const T = Array(10).fill(true);
+  /** Runden: Stufe 1 went from 4 of 10 to 9 of 10; Stufe 2 became 'Sicher' after a hard start and was kept in a review. */
+  function improvedState(): ProgressState {
+    const s = stateWith({
+      'zahlen.runden#1': progress('geuebt', { recent: [true, true, true, true, false, true, true, true, true, true] }),
+      'zahlen.runden#2': progress('sicher', { recent: T }),
+      'zahlen.stellenwert#1': progress('geuebt', { recent: [true, false, false, false, false, false, false, false, false, false] }),
+      'schriftlich.plus#1': progress('sicher', { recent: T }),
+    });
+    s.growth = {
+      stufen: {
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: '2026-10-10', after: 10, best: 9 },
+        'zahlen.runden#2': { earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: '2026-10-11', after: 4, kept: 1 },
+        // got worse: never shown
+        'zahlen.stellenwert#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-12', after: 10, best: 1 },
+      },
+      // stored tags are misconception families (src/topics/errorFamilies.ts)
+      errors: { 'schriftlich.plus': { uebertrag: { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' }, stellengerecht: { day: '2026-10-13', seen: 2, run: 2 } } },
+      facts: {},
+    };
+    return s;
+  }
+
+  /** The block under a topic: an h3 named "So hast du dich verbessert: <topic>" (no extra landmark). */
+  async function growthIn(topic: RegExp): Promise<HTMLElement> {
+    const region = await screen.findByRole('region', { name: topic });
+    const heading = await within(region).findByRole('heading', { level: 3, name: /^So hast du dich verbessert/ });
+    return heading.closest<HTMLElement>('.progress-growth')!;
+  }
+  const linesOf = (block: HTMLElement) => [...block.querySelectorAll('.progress-growth__lines li')].map((li) => li.textContent);
+
+  it('lists only improvements per skill, positively worded, under the topic', async () => {
+    current.state = improvedState();
+    render(<ProgressPage />);
+    const growth = await growthIn(/^Zahlen bis/);
+    // the heading names the topic for screen readers (headings list), like the table caption does
+    expect(within(growth).getByRole('heading', { level: 3 }).textContent).toMatch(/^So hast du dich verbessert: Zahlen bis/);
+    expect(screen.queryByRole('region', { name: /So hast du dich verbessert/ })).toBeNull();
+    const skills = [...growth.querySelectorAll('.progress-growth__skill')];
+    expect(skills.map((li) => li.querySelector('.progress-growth__name')!.textContent)).toEqual(['Runden']);
+    expect(linesOf(growth)).toEqual([
+      'Stufe 1: Am Anfang 4 von 10 auf Anhieb, später 9 von 10.',
+      'Stufe 2: Am Anfang 4 von 10 auf Anhieb – jetzt ist die Stufe „Sicher“.',
+      'Stufe 2: In der Wiederholung hast du auf Anhieb gelöst, was vorher noch knifflig war.',
+    ]);
+    // Stellenwerte got worse: nothing is said about it.
+    expect(growth.textContent).not.toContain('Stellenwerte');
+    const lines = linesOf(await growthIn(/Schriftlich/));
+    expect(lines).toContain('Du hast den Übertrag fünfmal richtig beachtet.');
+    // not yet overcome: nothing is said about it
+    expect(lines.join(' ')).not.toMatch(/stellengerecht|untereinander/i);
+  });
+
+  it('says "Früher" for progress saved before the tracking existed, and never "0 von 10"', async () => {
+    const s = stateWith({ 'zahlen.runden#1': progress('geuebt'), 'zahlen.runden#2': progress('sicher') });
+    s.growth = {
+      stufen: {
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 3, earlyWrong: 7, earlyDay: '2026-10-10', carried: true, after: 10, best: 8 },
+        'zahlen.runden#2': { earlyN: 10, earlyOk: 0, earlyWrong: 10, earlyDay: '2026-10-10', after: 10, best: 7 },
+      },
+      errors: {},
+      facts: {},
+    };
+    current.state = s;
+    render(<ProgressPage />);
+    expect(linesOf(await growthIn(/^Zahlen bis/))).toEqual([
+      'Stufe 1: Früher 3 von 10 auf Anhieb, später 8 von 10.',
+      'Stufe 2: Am Anfang war das noch knifflig – später 7 von 10 auf Anhieb.',
+    ]);
+  });
+
+  it('an overcome error in written subtraction is worded for the child’s subtraction method', async () => {
+    const withMethod = (subtractionMethod: 'abziehen' | 'ergaenzen') => {
+      const st = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) }, { settings: { ...stateWith().settings, subtractionMethod } });
+      st.growth = { stufen: {}, errors: { 'schriftlich.plus': { entbuendeln: { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' } } }, facts: {} };
+      return st;
+    };
+    current.state = withMethod('abziehen');
+    render(<ProgressPage />);
+    expect(linesOf(await growthIn(/Schriftlich/))).toContain('Du hast das Entbündeln fünfmal richtig gemacht.');
+    cleanup();
+    current.state = withMethod('ergaenzen');
+    render(<ProgressPage />);
+    expect(linesOf(await growthIn(/Schriftlich/))).toContain('Du hast das Erweitern mit der gemerkten 1 fünfmal richtig gemacht.');
+  });
+
+  it('a tag without a family still gets a calm, positive line (said once)', async () => {
+    const st = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) });
+    const done = { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' };
+    st.growth = { stufen: {}, errors: { 'schriftlich.plus': { 'neu.fehler': done, 'noch-neuer': { ...done, done: '2026-10-15' } } }, facts: {} };
+    current.state = st;
+    render(<ProgressPage />);
+    expect(linesOf(await growthIn(/Schriftlich/))).toEqual(['Du hast die knifflige Stelle in diesen Aufgaben fünfmal richtig gelöst.']);
+  });
+
+  it('shows nothing (no empty box, no pressure) without improvement', async () => {
+    current.state = stateWith({ 'zahlen.runden#1': progress('geuebt', { recent: [true, false] }) });
+    render(<ProgressPage />);
+    await screen.findByRole('table');
+    expect(screen.queryByRole('heading', { name: /So hast du dich verbessert/ })).toBeNull();
+    expect(document.querySelector('.progress-growth')).toBeNull();
+  });
+
+  it('the view is plain text in headings and lists: nothing to operate, the topic link stays reachable by keyboard', async () => {
+    current.state = improvedState();
+    render(<ProgressPage />);
+    const growth = await growthIn(/^Zahlen bis/);
+    expect(growth.querySelectorAll('a, button, input, [tabindex]')).toHaveLength(0);
+    // reading order: table, then the improvements, then "Weiter üben"
+    const link = screen.getByRole('link', { name: 'Weiter üben: Zahlen' });
+    expect(growth.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const text = document.body.textContent ?? '';
+    for (const banned of IMPROVEMENT_BANNED_PHRASES) expect(text.toLowerCase(), banned).not.toContain(banned);
+    expect(text).not.toMatch(/schneller|schlau|0 von 10/i);
+  });
+});
+
 describe('BadgesPage', () => {
   it('lists only earned badges (newest first) and keeps the rest a surprise', () => {
     current.state = stateWith({}, { badges: { 'runden-profi': '2026-10-01', 'einmaleins-profi': '2026-10-12', 'unbekannt': '2026-10-13' } });
@@ -323,6 +441,15 @@ describe('Legal pages', () => {
       expect(text, needle).toContain(needle);
     }
     expect(screen.getAllByText(OPERATOR_PLACEHOLDER).length).toBeGreaterThan(0);
+  });
+
+  it('Datenschutz: names the data of the improvement badges (days only, error types, Einmaleins misses)', () => {
+    render(<PrivacyPage />);
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('für die Abzeichen fürs Besserwerden');
+    expect(text).toContain('typischen Fehlerarten');
+    expect(text).toContain('je Einmaleins-Aufgabe der Tag, an dem sie zuletzt danebenging');
+    expect(text).toContain('nur das Datum, ohne Uhrzeit');
   });
 
   it('Datenschutz: localStorage rests on the § 25 Abs. 2 Nr. 2 TDDDG exemption only, never on consent (P1/P2)', () => {

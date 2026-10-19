@@ -314,14 +314,14 @@ describe('Einmaleins facts', () => {
 });
 
 describe('totals, days and special events', () => {
-  it('counts answered, firstTry, afterHint (solved && !firstTry) and keeps distinct sorted days', () => {
+  it('counts answered and firstTry and keeps distinct sorted days', () => {
     const { state } = run([
       { firstTry: true, day: '2026-10-21' },
       { firstTry: false, solved: true, usedHint: true, day: '2026-10-19' },
       { firstTry: false, solved: false, day: '2026-10-21' },
       { firstTry: false, solved: true, day: '2026-10-20' },
     ]);
-    expect(state.totals).toEqual({ answered: 4, firstTry: 1, afterHint: 2, rounds: 0, checksPassed: 0 });
+    expect(state.totals).toEqual({ answered: 4, firstTry: 1, rounds: 0, checksPassed: 0 });
     expect(state.days).toEqual(['2026-10-19', '2026-10-20', '2026-10-21']);
   });
 
@@ -343,7 +343,7 @@ describe('totals, days and special events', () => {
     const p = state.skills['zahlen.binaer#1'];
     expect(p.state).toBe('sicher');
     expect(isOptionalEntry(p)).toBe(true);
-    expect(state.totals.afterHint).toBe(0);
+    expect(state.totals.checksPassed).toBe(0);
     expect(state.totals.answered).toBe(9);
   });
 

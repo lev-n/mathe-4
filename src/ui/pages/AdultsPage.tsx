@@ -195,9 +195,20 @@ function HowItWorks() {
         </li>
         <li>
           <strong>Keine Punkte, Münzen oder Shops:</strong> Angekündigte Belohnungen können die Freude an der Sache mindern –
-          bei Kindern stärker als bei Erwachsenen. Abzeichen kommen deshalb überraschend und benennen eine Fähigkeit.
+          bei Kindern stärker als bei Erwachsenen. Abzeichen kommen deshalb überraschend und benennen eine Fähigkeit oder einen
+          Fortschritt.
         </li>
       </ul>
+
+      <h3>Abzeichen fürs Besserwerden</h3>
+      <p>
+        Die wichtigsten Abzeichen gibt es nicht fürs Richtigmachen beim ersten Mal, sondern dafür, dass etwas, das am Anfang
+        schwerfiel, später gelingt: an einem anderen Tag oder in der Wiederholung nach ein paar Tagen. Verglichen wird nur mit dem
+        eigenen früheren Stand. Kleine Fortschritte in einer Runde bekommen nur einen kurzen Satz. Mit absichtlich verkehrten
+        Antworten allein lässt sich kein Abzeichen verdienen: Jedes braucht echte Erfolge an späteren Tagen oder in einer
+        Wiederholung. Unter „Mein Fortschritt“ zeigt „So hast du dich verbessert“, was besser geworden ist. Dafür werden
+        nur Zahlen, Fehlerarten und Tage gespeichert, wie alles andere nur auf diesem Gerät und erst nach „Ja, merken“.
+      </p>
 
       <h3>Faires Design</h3>
       <p>
@@ -224,7 +235,7 @@ function SettingsSection() {
   return (
     <section aria-labelledby="settings-title" className="settings">
       <h2 id="settings-title">Einstellungen</h2>
-      {consent === 'granted' && saveStatus === 'failed' ? (
+      {consent === 'granted' && saveStatus !== 'ok' ? (
         <p className="notice" data-testid="settings-status">
           <span>Die Einstellungen gelten sofort. {SAVE_FAILED_ADULT}</span>
         </p>
@@ -455,7 +466,13 @@ export function StorageSection() {
       <div className="status-box" data-testid="storage-status">
         {consent === 'granted' ? (
           <>
-            {saveStatus === 'failed' ? (
+            {saveStatus === 'newer' ? (
+              <p>
+                <strong>{SAVE_FAILED_ADULT}</strong> Auf diesem Gerät ist Fortschritt aus einer neueren Version von Mathe 4
+                gespeichert. Er wird hier nicht überschrieben. Laden Sie die Seite neu, oder löschen Sie ihn mit „Fortschritt
+                löschen“, damit wieder gespeichert wird.
+              </p>
+            ) : saveStatus === 'failed' ? (
               <p>
                 <strong>{SAVE_FAILED_ADULT}</strong> Der Browser lässt das Speichern nicht zu (zum Beispiel im privaten Modus
                 oder wenn der Speicher voll ist). Mit „Fortschritt sichern“ können Sie ihn in einer Datei aufbewahren.
@@ -483,6 +500,10 @@ export function StorageSection() {
           </>
         )}
       </div>
+      <p className="hint">
+        Der Fortschritt gehört zu einem Kind: Mathe 4 kennt keine Namen und unterscheidet nicht, wer übt. Üben mehrere Kinder
+        im selben Browser, mischt sich ihr Fortschritt. Dann hilft ein eigenes Browser-Profil für jedes Kind.
+      </p>
 
       <h3>Sichern und laden</h3>
       <p>

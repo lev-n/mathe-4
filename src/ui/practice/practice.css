@@ -362,6 +362,18 @@
 .pr-mastery__line.is-up .pr-stars { animation: pr-pop var(--celebrate-ms) ease-out both; }
 @keyframes pr-pop { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
+/* "Das hast du verbessert" (docs/research.md M16): calm lines, the larger improvements with a solid border. */
+.pr-improved__title { margin: 0 0 var(--space-2); }
+.pr-improved__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+.pr-improved__line {
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid transparent;
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+}
+.pr-improved__line.is-big { border-color: var(--ok); background: var(--ok-soft); font-weight: 650; }
+.pr-improved__head { display: block; }
+
 .pr-badges__title { margin: 0 0 var(--space-2); }
 .pr-badges__list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
 .pr-badge {

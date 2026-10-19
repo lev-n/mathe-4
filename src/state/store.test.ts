@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS } from './types';
 /** Exercise every mutating API once. */
 function useEverything(s: Store) {
   for (let i = 0; i < 9; i++) s.recordAnswer(ev());
+  s.recordAnswer(ev({ firstTry: false, bugTags: ['abrunden'], bugIds: ['abrunden'] }));
   s.recordAnswer(ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '6x7', latencyMs: 1500 }));
   s.recordRound({ day: '2026-10-19', answered: 10, firstTry: 9 });
   s.recordBlitz(12);
@@ -35,7 +36,21 @@ describe('consent (§ 25 TDDDG)', () => {
     expect(storage.length).toBe(0);
     expect(storage.writes).toBe(0);
     expect(storage.removes).toBe(0);
-    expect(s.get().totals.answered).toBe(10);
+    expect(s.get().totals.answered).toBe(11);
+    expect(s.get().growth.errors['zahlen.runden']).toBeDefined();
+  });
+
+  it('improvement tracking lives in memory until consent, then it is written with the rest', () => {
+    const storage = memoryStorage();
+    const s = createStore(storage);
+    s.recordAnswer(ev({ firstTry: false, bugTags: ['abrunden'], bugIds: ['abrunden'] }));
+    expect(s.get().growth.errors['zahlen.runden'].abrunden.day).toBe('2026-10-19');
+    expect(storage.writes).toBe(0);
+    s.setConsent('granted');
+    expect(stored(storage).growth).toEqual(s.get().growth);
+    s.setConsent('denied');
+    expect(storage.data.has(STORAGE_KEY)).toBe(false);
+    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: '2026-10-19' });
   });
 
   it("'granted' writes the current state immediately and after every change", () => {
@@ -138,7 +153,6 @@ describe('corrupt or unknown stored data is ignored safely', () => {
     '[]',
     '{"app":"mathe4","version":2}',
     '{"app":"mathe4","version":3}',
-    JSON.stringify({ ...JSON.parse(serializeState(emptyState())), version: 3 }),
     '{"app":"mathe4","version":1,"skills":{"zahlen.runden#1":{"attempts":-1}}}',
     JSON.stringify({ ...JSON.parse(serializeState(emptyState())), app: 'anderes' }),
   ];
@@ -154,6 +168,52 @@ describe('corrupt or unknown stored data is ignored safely', () => {
     expect(stored(storage).totals.answered).toBe(1);
   });
 
+  it('a document from a newer app version (a rollback of the site) is never overwritten, even after "Ja, merken"', () => {
+    const text = JSON.stringify({ ...JSON.parse(serializeState(emptyState())), version: 4, totals: { answered: 99 } });
+    const storage = memoryStorage({ [STORAGE_KEY]: text });
+    const s = createStore(storage);
+    expect(s.getConsent()).toBe('denied');
+    expect(s.get()).toEqual(emptyState());
+    s.recordAnswer(ev());
+    s.setConsent('granted');
+    s.recordAnswer(ev());
+    expect(storage.data.get(STORAGE_KEY)).toBe(text);
+    expect(storage.writes).toBe(0);
+    // honest: the UI must not claim that progress is saved, and it can name the reason
+    expect(s.getSaveStatus()).toBe('newer');
+    // "Fortschritt löschen" is an explicit choice to delete what is stored: then saving works again
+    s.reset();
+    expect(stored(storage)).toMatchObject({ version: 3, totals: { answered: 0 } });
+    s.recordAnswer(ev());
+    expect(stored(storage).totals.answered).toBe(1);
+    expect(s.getSaveStatus()).toBe('ok');
+  });
+
+  it('saving never gets stuck: when another tab removes the newer document or writes a valid one, this tab saves again', () => {
+    const newer = JSON.stringify({ ...JSON.parse(serializeState(emptyState())), version: 4 });
+    const { data, tabs } = sharedTabs(2);
+    data.set(STORAGE_KEY, newer);
+    const a = createStore(tabs[0].storage, tabs[0].events);
+    const b = createStore(tabs[1].storage, tabs[1].events);
+    expect(a.getConsent()).toBe('denied');
+    // B deletes the progress ("Fortschritt löschen") and opts in again, then answers
+    b.reset();
+    b.setConsent('granted');
+    b.recordAnswer(ev());
+    expect(a.getConsent()).toBe('granted');
+    a.recordAnswer(ev());
+    a.recordAnswer(ev());
+    expect(a.getSaveStatus()).toBe('ok');
+    expect(JSON.parse(data.get(STORAGE_KEY)!).totals.answered).toBe(3);
+    // "Nicht mehr merken" also frees a tab that only saw the newer document
+    data.set(STORAGE_KEY, newer);
+    const c = createStore(tabs[0].storage);
+    c.forget();
+    c.setConsent('granted');
+    c.recordAnswer(ev());
+    expect(c.getSaveStatus()).toBe('ok');
+  });
+
   it('a document stored by v1 (with session ids) is migrated on load and saved without them', () => {
     const v1 = {
       app: 'mathe4',
@@ -162,7 +222,7 @@ describe('corrupt or unknown stored data is ignored safely', () => {
       facts: {},
       days: ['2026-10-18'],
       badges: {},
-      totals: { answered: 3, firstTry: 3, afterHint: 0, rounds: 0, checksPassed: 0 },
+      totals: { answered: 3, firstTry: 3, rounds: 0, checksPassed: 0 },
       settings: DEFAULT_SETTINGS,
     };
     const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(v1) });
@@ -171,7 +231,7 @@ describe('corrupt or unknown stored data is ignored safely', () => {
     expect(s.get().skills['zahlen.runden#1'].practiceDays).toBe(1);
     s.recordAnswer(ev({ day: '2026-10-19' }));
     const text = storage.data.get(STORAGE_KEY)!;
-    expect(JSON.parse(text).version).toBe(2);
+    expect(JSON.parse(text).version).toBe(3);
     expect(JSON.parse(text).skills['zahlen.runden#1'].practiceDays).toBe(2);
     expect(text).not.toContain('s1pw4oocmvdwgrwy');
     expect(text).not.toContain('sessions');
@@ -447,7 +507,7 @@ describe('recordAnswer / recordRound / recordBlitz', () => {
   it('returns the mastery change and badges earned by the answer (once)', () => {
     const s = createStore(null);
     let out = s.recordAnswer(ev());
-    expect(out).toEqual({ before: 'neu', after: 'geuebt', newBadges: [], suggestNextStufe: false });
+    expect(out).toEqual({ before: 'neu', after: 'geuebt', newBadges: [], suggestNextStufe: false, growth: [] });
     for (let i = 0; i < 6; i++) out = s.recordAnswer(ev({ day: '2026-10-21' }));
     expect(out.suggestNextStufe).toBe(true);
     out = s.recordAnswer(ev({ day: '2026-10-21' }));
@@ -474,7 +534,7 @@ describe('recordAnswer / recordRound / recordBlitz', () => {
     const s = createStore(null);
     const before = s.get();
     const out = s.recordAnswer(ev({ purpose: 'blitz', factKey: '3x7' }));
-    expect(out).toEqual({ before: 'neu', after: 'neu', newBadges: [], suggestNextStufe: false });
+    expect(out).toEqual({ before: 'neu', after: 'neu', newBadges: [], suggestNextStufe: false, growth: [] });
     expect(s.get()).toBe(before);
   });
 
@@ -557,6 +617,9 @@ describe('export / import', () => {
     source = createStore(null);
     for (let i = 0; i < 8; i++) source.recordAnswer(ev());
     source.recordAnswer(ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '4x8', latencyMs: 2500 }));
+    // improvement tracking: an error-library tag and a missed Einmaleins fact
+    source.recordAnswer(ev({ firstTry: false, bugTags: ['abrunden'], bugIds: ['abrunden'] }));
+    source.recordAnswer(ev({ skillId: 'kopfrechnen.einmaleins', topicId: 'kopfrechnen', factKey: '6x7', firstTry: false, purpose: 'review' }));
     source.recordBlitz(9);
     source.updateSettings({ subtractionMethod: 'ergaenzen', weeklyGoal: 4 });
   });
@@ -565,6 +628,31 @@ describe('export / import', () => {
     const target = createStore(null);
     expect(target.importJson(source.exportJson())).toEqual({ ok: true });
     expect(target.get()).toEqual(source.get());
+    expect(target.get().growth.errors['zahlen.runden']).toEqual({ abrunden: { day: '2026-10-19', seen: 1, run: 0 } });
+    expect(target.get().growth.facts).toEqual({ '6x7': '2026-10-19' });
+  });
+
+  it('a backup from before the improvement tracking (v2) still imports, and tracking goes on from there', () => {
+    const v2 = JSON.parse(source.exportJson());
+    delete v2.growth;
+    v2.version = 2;
+    const target = createStore(null);
+    expect(target.importJson(JSON.stringify(v2))).toEqual({ ok: true });
+    expect(target.get().version).toBe(3);
+    expect(target.get().skills).toEqual(source.get().skills);
+    target.recordAnswer(ev({ firstTry: false, bugTags: ['abrunden'], bugIds: ['abrunden'], day: '2026-10-20' }));
+    expect(target.get().growth.errors['zahlen.runden'].abrunden).toEqual({ day: '2026-10-20', seen: 1, run: 0 });
+  });
+
+  it("a backup with the removed 'Dranbleiber' badge and its count imports without them", () => {
+    const old = JSON.parse(source.exportJson());
+    old.badges = { ...old.badges, dranbleiber: '2026-10-15' };
+    old.totals = { ...old.totals, afterHint: 12 };
+    const target = createStore(null);
+    expect(target.importJson(JSON.stringify(old))).toEqual({ ok: true });
+    expect(target.get().badges.dranbleiber).toBeUndefined();
+    expect(target.get().totals).not.toHaveProperty('afterHint');
+    expect(target.exportJson()).not.toMatch(/dranbleiber|afterHint/);
   });
 
   it('import replaces progress and saves it when consent was given', () => {
@@ -613,7 +701,7 @@ describe('export / import', () => {
 
   it('the export contains aggregates only (no free text, no names)', () => {
     const file = JSON.parse(source.exportJson());
-    expect(Object.keys(file).sort()).toEqual(['app', 'badges', 'blitzBest', 'days', 'facts', 'lastPlayed', 'settings', 'skills', 'totals', 'version']);
+    expect(Object.keys(file).sort()).toEqual(['app', 'badges', 'blitzBest', 'days', 'facts', 'growth', 'lastPlayed', 'reviewed', 'settings', 'skills', 'totals', 'version']);
     expect(file.lastPlayed).toEqual({ skillId: expect.any(String), stufe: expect.any(Number) });
     expect(Object.keys(file.lastPlayed).sort()).toEqual(['skillId', 'stufe']);
   });

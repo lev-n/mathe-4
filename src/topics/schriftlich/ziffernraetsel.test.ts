@@ -78,7 +78,7 @@ describe('schriftlich.ziffernraetsel', () => {
 
   it('subtraction gaps: borrow-ignoring digit with a method-specific hint', () => {
     const p: Puzzle = { op: 'sub', operands: [652, 237], result: 415, masks: [{ row: 'result', place: 1, label: 'A' }], values: [1] };
-    expect(puzzleBugs(p, 'ergaenzen')).toEqual([{ id: 'zr.carry-A', match: { A: 2 }, hint: 'Denk bei A an die gemerkte 1 von den Einern.' }]);
+    expect(puzzleBugs(p, 'ergaenzen')).toEqual([{ id: 'zr.borrow-A', match: { A: 2 }, hint: 'Denk bei A an die gemerkte 1 von den Einern.' }]);
     expect(samples(ziffernraetselSkill, 2, ERG, 20).every((e) => e.answer.kind === 'multi')).toBe(true);
   });
 });

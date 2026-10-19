@@ -350,6 +350,32 @@ describe('session reducer: round flow', () => {
   });
 });
 
+describe('session reducer: error-library tags for the improvement tracking', () => {
+  const tagged: ItemMeta = { ...META, bugTags: ['add.no-carry', 'add.misaligned'] };
+  const carry: CheckResult = { correct: false, bugHint: 'Denk an den Übertrag.', bugId: 'add.no-carry' };
+  const misaligned: CheckResult = { correct: false, bugHint: 'Schreib Stelle unter Stelle.', bugId: 'add.misaligned' };
+
+  it('records the tags the task offered and the known mistakes of both attempts', () => {
+    const s = run(start(10, { meta: tagged }), [check(carry), check(misaligned)]);
+    expect(s.finished[0]).toMatchObject({ bugTags: ['add.no-carry', 'add.misaligned'], bugIds: ['add.no-carry', 'add.misaligned'], solved: false });
+  });
+
+  it('a mistake without a known bug or a correct answer records no bug ids; tags are still recorded', () => {
+    const same = run(start(10, { meta: tagged }), [check(carry), check(carry)]);
+    expect(same.finished[0].bugIds).toEqual(['add.no-carry']);
+    const s = run(start(10, { meta: tagged }), [check(WRONG), check(OK)]);
+    expect(s.finished[0].bugTags).toEqual(['add.no-carry', 'add.misaligned']);
+    expect('bugIds' in s.finished[0]).toBe(false);
+    expect('bugTags' in run(start(), [check(OK)]).finished[0]).toBe(false);
+  });
+
+  it('invalid input never sets a bug id', () => {
+    const s = run(start(10, { meta: tagged }), [check({ ...INVALID, bugId: 'add.no-carry' }), check(OK)]);
+    expect(s.finished[0]).toMatchObject({ firstTry: true });
+    expect(s.finished[0].bugIds).toBeUndefined();
+  });
+});
+
 describe('session reducer: recordAnswer exactly once per item (random walks)', () => {
   it('every finished item appears exactly once in `finished`, in order', () => {
     const results = [OK, WRONG, BUG, INVALID];

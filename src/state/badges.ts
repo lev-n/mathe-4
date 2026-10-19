@@ -1,16 +1,22 @@
 /**
  * Skill badges (docs/research.md M6–M8): named by competence, awarded as a surprise, never announced
  * in advance, no participation badges (§ 6.4). Every condition needs solved tasks (sicher/gemeistert
- * Stufen, known facts, tasks solved after a mistake, passed spaced checks); none is earned for
+ * Stufen, known facts, passed spaced checks, improvements); none is earned for
  * practice days or time spent (M6, M12 "virtual rewards for performing (repeated) actions"). The
  * weekly goal has its own gentle display and is never turned into a badge.
  * Conditions use only topic prefixes, counts, facts and totals, so they do not depend on other
  * modules' exact skill ids. NRW extras (optional entries) never count, and the Blitzrunde never feeds
  * any of these numbers.
+ *
+ * Improvement badges (docs/research.md M16, src/state/growth.ts) are the most significant ones: they reward
+ * getting better than one's own earlier self, and each needs evidence from a later day or from a spaced
+ * review, so wrong answers alone never earn one. Small improvements (a 2nd try, a twin task) get
+ * only a calm line in the round, never a badge. 25 badges in all (docs/research.md M7).
  */
 import { fmt } from '../core/format';
 import type { TopicId } from '../core/types';
 import { ALL_FACT_KEYS, KERN_FACT_KEYS } from './facts';
+import { growthFacts, type GrowthFacts } from './growth';
 import { TOPIC_IDS, isAtLeastSicher, isOptionalEntry, parseSkillKey } from './mastery';
 import type { BadgeDef, ProgressState } from './types';
 
@@ -23,6 +29,8 @@ export interface BadgeFacts {
   gemeistertTotal: number;
   /** Topics with ≥ 1 skill sicher on Stufe 3. */
   stufe3Topics: number;
+  /** Improvements (NRW extras excluded). */
+  growth: GrowthFacts;
 }
 
 interface BadgeRule extends BadgeDef {
@@ -67,11 +75,12 @@ const TOPIC_TEXTS: Record<TopicId, TopicTexts> = {
 
 /** Thresholds (heuristics; documented so they can be tuned in a pilot). */
 export const BADGE_THRESHOLDS = {
-  dranbleiber: 10,
   wiederholung: 10,
   themenProfiSkills: 3,
   stufe3Topics: 3,
   gedaechtnis: 5,
+  /** Topics with a lasting improvement for 'Vieles behalten' (the largest improvement badge). */
+  vielesBehaltenTopics: 3,
 } as const;
 
 function factsAtLeast(state: ProgressState, keys: readonly string[], box: number): boolean {
@@ -129,23 +138,49 @@ const RULES: BadgeRule[] = [
     met: (s) => factsAtLeast(s, ALL_FACT_KEYS, 3),
   },
   {
-    id: 'dranbleiber',
-    title: 'Dranbleiber',
-    description: 'Du hast 10 knifflige Aufgaben mit Tipp oder im zweiten Versuch gelöst.',
-    icon: '💪',
-    met: (s) => s.totals.afterHint >= BADGE_THRESHOLDS.dranbleiber,
-  },
-  {
     id: 'wiederholung',
     title: 'Wiederholungs-Profi',
     description: 'Du hast 10 Wiederholungen nach ein paar Tagen auf Anhieb gelöst.',
     icon: '🔁',
     met: (s) => s.totals.checksPassed >= BADGE_THRESHOLDS.wiederholung,
   },
+  // ── Improvement badges (docs/research.md M16), from the 3rd kind of improvement upwards ──
+  {
+    id: 'fehler-ueberwunden',
+    title: 'Stolperstein überwunden',
+    description: 'Du bist bei einer Aufgabenart öfter an derselben Stelle gestolpert. Danach hast du fünf solche Aufgaben auf Anhieb gelöst, auch an einem anderen Tag.',
+    icon: '🌉',
+    improvement: true,
+    met: (_s, f) => f.growth.overcome >= 1,
+  },
+  {
+    id: 'besser-geworden',
+    title: 'Besser geworden',
+    description: 'Du hast eine Aufgabenart geübt, die am Anfang noch knifflig war. An späteren Tagen hast du davon dreimal hintereinander mindestens 8 von 10 auf Anhieb gelöst.',
+    icon: '📈',
+    improvement: true,
+    met: (_s, f) => f.growth.improved >= 1,
+  },
+  {
+    id: 'behalten',
+    title: 'Gut behalten',
+    description: 'Du hast Tage später in der Wiederholung auf Anhieb gelöst, was vorher noch knifflig war.',
+    icon: '🌱',
+    improvement: true,
+    met: (_s, f) => f.growth.kept >= 1,
+  },
+  {
+    id: 'vieles-behalten',
+    title: 'Vieles behalten',
+    description: 'Du hast in drei Themen Tage später auf Anhieb gelöst, was vorher noch knifflig war.',
+    icon: '🌳',
+    improvement: true,
+    met: (_s, f) => f.growth.keptTopics >= BADGE_THRESHOLDS.vielesBehaltenTopics,
+  },
 ];
 
-/** 15–25 competence-named badges (no participation badges, never announced in advance). */
-export const BADGES: BadgeDef[] = RULES.map(({ id, title, description, icon }) => ({ id, title, description, icon }));
+/** Competence- and improvement-named badges (no participation badges, never announced in advance). */
+export const BADGES: BadgeDef[] = RULES.map(({ id, title, description, icon, improvement }) => (improvement ? { id, title, description, icon, improvement } : { id, title, description, icon }));
 
 const zeroPerTopic = (): Record<TopicId, number> => Object.fromEntries(TOPIC_IDS.map((t) => [t, 0])) as Record<TopicId, number>;
 
@@ -167,7 +202,7 @@ export function badgeFacts(state: ProgressState): BadgeFacts {
   }
   const sicherSkills = zeroPerTopic();
   for (const t of TOPIC_IDS) sicherSkills[t] = sicherSkillIds[t].size;
-  return { sicherSkills, gemeistert, gemeistertTotal, stufe3Topics: stufe3.size };
+  return { sicherSkills, gemeistert, gemeistertTotal, stufe3Topics: stufe3.size, growth: growthFacts(state) };
 }
 
 /** Ids of badges whose condition is met but that are not yet in state.badges. */

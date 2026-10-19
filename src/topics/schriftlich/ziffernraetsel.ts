@@ -160,7 +160,8 @@ export function puzzleBugs(p: Puzzle, method: SubtractionMethod): Bug[] {
           ? `Denk bei ${m.label} daran: Bei den ${prev} wurde entbündelt.`
           : `Denk bei ${m.label} an die gemerkte 1 von den ${prev}.`
         : `Denk bei ${m.label} an den Übertrag von den ${prev}.`;
-    bugs.push({ id: `zr.carry-${m.label}`, match: { [m.label]: wrong }, hint });
+    // carry (plus, mal) and borrow (minus) are different misconceptions (src/topics/errorFamilies.ts)
+    bugs.push({ id: `${p.op === 'sub' ? 'zr.borrow' : 'zr.carry'}-${m.label}`, match: { [m.label]: wrong }, hint });
   });
   return bugs;
 }

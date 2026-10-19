@@ -8,19 +8,22 @@ import { generateUnique } from '../../core/generate';
 import { createRng, randomSeed } from '../../core/rng';
 import type { CheckResult, Exercise, GenContext, Response, SkillDef, Stufe } from '../../core/types';
 import { today } from '../../state/dates';
+import { SMALL_ACKS_PER_ROUND, roundNotes } from '../../state/growth';
 import { MAX_TWINS, buildRound } from '../../state/round';
 import { masteryOf } from '../../state/selectors';
 import { store } from '../../state/store';
-import type { AnswerOutcome, BadgeDef, PracticePlan, RoundSlot } from '../../state/types';
+import type { AnswerOutcome, BadgeDef, GrowthEvent, PracticePlan, RoundSlot } from '../../state/types';
 import { answerFields, firstEmptyRequiredField, firstWrongField, focusField, initialField, showRegion } from '../answers/fieldNav';
 import { coarsePointer, useKeypadEnabled } from '../keypad/Keypad';
 import { useSettings } from '../../state/useProgress';
+import { tagsFor } from '../../topics/errorFamilies';
 import { getTopicMeta } from '../../topics/registry';
 import BreakPrompt, { BREAK_AFTER_MS } from './BreakPrompt';
 import ConsentPrompt from './ConsentPrompt';
 import ItemView from './ItemView';
 import PracticeHeader from './PracticeHeader';
-import RoundSummary, { type MasteryLine } from './RoundSummary';
+import RoundSummary, { ImprovedNotes, NewBadges, type MasteryLine, type SummaryNote } from './RoundSummary';
+import { afterPracticeAnnouncement, isBigNote, noteParts, spokenText, summaryAnnouncement } from './growthText';
 import WorkedExample from './WorkedExample';
 import {
   EFFORT_PHRASES,
@@ -29,13 +32,13 @@ import {
   EXAMPLE_INTRO,
   GOODBYE,
   NORMALISING_PHRASES,
+  TWIN_SOLVED_PHRASES,
   UNCHANGED_ANSWER,
   announceCorrect,
   announceRetry,
   announceSolution,
   rotate,
   stufeLabel,
-  summaryText,
 } from './phrases';
 import {
   createSession,
@@ -74,6 +77,7 @@ interface SummaryData {
   solved: number;
   answered: number;
   mastery: MasteryLine[];
+  notes: SummaryNote[];
   badges: BadgeDef[];
   nextStufe: Stufe | null;
 }
@@ -85,6 +89,10 @@ function metaOf(ex: Exercise, skill: SkillDef): ItemMeta {
   const meta: ItemMeta = { topicId: ex.topicId ?? skill.topicId, hintCount: ex.hints.length };
   if (ex.factKey) meta.factKey = ex.factKey;
   if (skill.optional === 'nrw') meta.optional = true;
+  // The typical errors this task offers, as misconception families of the skill (src/topics/errorFamilies.ts):
+  // the improvement tracking counts them (src/state/growth.ts).
+  const bugTags = tagsFor(skill.id, (ex.bugs ?? []).map((b) => b.id));
+  if (bugTags.length > 0) meta.bugTags = bugTags;
   return meta;
 }
 
@@ -236,6 +244,10 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
   const [live, setLive] = useState('');
   const outcomes = useRef<{ f: FinishedItem; outcome: AnswerOutcome | null }[]>([]);
   const roundRecorded = useRef(false);
+  /** Effort lines after a 2nd try given in this round (capped; twin lines are limited by MAX_TWINS already). */
+  const smallAcks = useRef(0);
+  /** Improvements and badges for the goodbye screen when the round ends at the break suggestion (no summary). */
+  const [farewell, setFarewell] = useState<{ notes: SummaryNote[]; badges: BadgeDef[] } | null>(null);
   const entryFocus = !autoFocus && !boot.session.example && entryFocusAllowed(keypadOn);
   const pendingFocus = useRef<FocusTarget>(
     autoFocus ? (boot.session.example ? 'example' : 'item') : entryFocus ? 'item' : focusHeading ? 'heading' : null,
@@ -318,6 +330,8 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
   const record = (f: FinishedItem) => {
     let outcome: AnswerOutcome | null = null;
     try {
+      // the matched Bugs as the same family tags as ItemMeta.bugTags
+      const bugIds = tagsFor(f.skillId, f.bugIds);
       outcome = store.recordAnswer({
         skillId: f.skillId,
         topicId: f.topicId,
@@ -330,6 +344,9 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
         latencyMs: f.latencyMs,
         day: today(),
         optional: f.optional,
+        bugTags: f.bugTags,
+        bugIds: bugIds.length > 0 ? bugIds : undefined,
+        wrongAttempt: !f.solved || f.secondTry,
       });
     } catch (err) {
       console.error('Antwort konnte nicht gespeichert werden', err);
@@ -387,7 +404,13 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     if (item.phase === 'solved') {
       const f = next.finished[next.finished.length - 1];
       const lines: string[] = [];
-      if (f?.secondTry) lines.push(rotate(EFFORT_PHRASES, shared.praiseCounter++));
+      // Small improvements get one calm line (docs/research.md M16): a twin task solved first try (at most
+      // MAX_TWINS per round), a 2nd try a few times per round at most, so wrong answers on purpose do not pay.
+      if (f?.purpose === 'twin' && f.firstTry) lines.push(rotate(TWIN_SOLVED_PHRASES, shared.praiseCounter++));
+      else if (f?.secondTry && smallAcks.current < SMALL_ACKS_PER_ROUND) {
+        smallAcks.current += 1;
+        lines.push(rotate(EFFORT_PHRASES, shared.praiseCounter++));
+      }
       lines.push(exercise.praise);
       setPraise(lines);
       announce(announceCorrect(exercise, lines.join(' ')));
@@ -414,6 +437,25 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     }
   };
 
+  /** "Das hast du verbessert" and new badges from the answers recorded so far (`extra`: badges for finishing). */
+  const improvementsSoFar = (finished: readonly FinishedItem[], extra: readonly BadgeDef[] = []) => {
+    const method = store.get().settings.subtractionMethod;
+    const events: GrowthEvent[] = outcomes.current.flatMap(({ outcome }) => outcome?.growth ?? []);
+    const titleOf = (id: string) => skillMap.get(id)?.title ?? id;
+    const notes: SummaryNote[] = roundNotes(finished, events).map((n, i) => {
+      const { head, text } = noteParts(n, titleOf, method);
+      const note: SummaryNote = { key: `${n.kind}-${i}`, text, big: isBigNote(n) };
+      if (head) note.head = head;
+      const spoken = spokenText(head ? `${head}: ${text}` : text);
+      if (spoken) note.spoken = spoken;
+      return note;
+    });
+    const badges = new Map<string, BadgeDef>();
+    for (const { outcome } of outcomes.current) outcome?.newBadges.forEach((b) => badges.set(b.id, b));
+    extra.forEach((b) => badges.set(b.id, b));
+    return { notes, badges: [...badges.values()] };
+  };
+
   const finishRound = (s: SessionState) => {
     if (roundRecorded.current) return;
     roundRecorded.current = true;
@@ -438,14 +480,12 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
       if (outcome && outcome.after !== outcome.before && (outcome.after === 'sicher' || outcome.after === 'gemeistert')) line.levelUp = true;
       seen.set(key, line);
     }
-    const badges = new Map<string, BadgeDef>();
-    for (const { outcome } of outcomes.current) outcome?.newBadges.forEach((b) => badges.set(b.id, b));
-    roundBadges.forEach((b) => badges.set(b.id, b));
     const suggest = outcomes.current.some(({ outcome }) => outcome?.suggestNextStufe);
     const nextStufe = plan.mode === 'skill' && plan.stufe < 3 && suggest ? ((plan.stufe + 1) as Stufe) : null;
-    setSummary({ solved: sum.solved, answered: sum.answered, mastery: [...seen.values()], badges: [...badges.values()], nextStufe });
+    const { notes, badges: badgeList } = improvementsSoFar(s.finished, roundBadges);
+    setSummary({ solved: sum.solved, answered: sum.answered, mastery: [...seen.values()], notes, badges: badgeList, nextStufe });
     setView('summary');
-    announce(summaryText(sum.solved, sum.answered));
+    announce(summaryAnnouncement(sum.solved, sum.answered, notes.map((n) => n.text), badgeList));
     pendingFocus.current = 'summary';
   };
 
@@ -534,8 +574,13 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
   };
 
   const goodbye = () => {
+    // Leaving at the break suggestion skips the summary: show what improved so far here (after practice, so it is
+    // no pop-up during the round). After the summary ("Fertig für heute") it is not repeated.
+    const after = view === 'break' ? improvementsSoFar(sessionRef.current.finished) : null;
+    const shown = after && (after.notes.length > 0 || after.badges.length > 0) ? after : null;
+    setFarewell(shown);
     setView('goodbye');
-    announce(GOODBYE);
+    announce(shown ? afterPracticeAnnouncement(GOODBYE, shown.notes.length, shown.badges) : GOODBYE);
     pendingFocus.current = 'goodbye';
   };
 
@@ -651,6 +696,7 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
           solved={summary.solved}
           answered={summary.answered}
           mastery={summary.mastery}
+          notes={summary.notes}
           badges={summary.badges}
           nextStufe={summary.nextStufe}
           onAgain={onAgain}
@@ -668,6 +714,12 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
           <h2 id="pr-goodbye-h" tabIndex={-1} ref={goodbyeRef}>
             {GOODBYE}
           </h2>
+          {farewell && (
+            <>
+              <ImprovedNotes notes={farewell.notes} />
+              <NewBadges badges={farewell.badges} />
+            </>
+          )}
           <button type="button" className="btn btn--primary btn--lg" onClick={onExit}>
             Zur Übersicht
           </button>
