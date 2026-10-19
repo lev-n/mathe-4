@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BANNED_PHRASES } from '../core/testing';
 import { applyAnswer } from './mastery';
-import { applyGrowth } from './growth';
+import { applyGrowth, seedGrowth } from './growth';
 import { IMPORT_MESSAGES, MAX_IMPORT_CHARS, MIGRATIONS, migrate, migrateV1toV2, migrateV2toV3, parseDocument, parseSettings, parseText, sanitizeSettingsPatch, serializeState, validateState } from './schema';
 import type { Migration } from './schema';
 import { createStore, emptyState } from './store';
@@ -205,13 +205,17 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     expect(r.state.totals).toEqual(v2().totals);
     expect(r.state.growth).toEqual({
       stufen: {
-        'zahlen.runden#1': { early: v2().skills['zahlen.runden#1'].recent, earlyWrong: 5, earlyDay: '2026-10-15', after: 0, miss: '2026-10-15' },
-        'zahlen.runden#2': { early: [true, true, false], earlyWrong: 1, after: 0, miss: '2026-10-16' },
-        // 'sicher' entries get nothing: no wave of rewards for old (or help-only) misses right after the update
+        // still 'geuebt': its misses count (more answers than the window, so it is not the real start: carried)
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15' },
+        'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16' },
+        // 'sicher': a closed window without misses, so old (or help-only) misses never turn into rewards
+        'geometrie.umfang#1': { earlyN: 10, earlyOk: 10, earlyWrong: 0, earlyDay: '2026-10-12', after: 0 },
+        'schriftlich.addition#2': { earlyN: 10, earlyOk: 9, earlyWrong: 0, earlyDay: '2026-10-17', carried: true, after: 0 },
       },
       errors: {},
       facts: {},
     });
+    expect(migrateV2toV3(v2())).toEqual({ ...v2(), version: 3 });
   });
 
   it('migrated progress keeps working: the seeded start and miss of a Geübt entry lead to later improvements', () => {
@@ -222,31 +226,30 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     expect(old.growth).toEqual([]);
     // the seeded early window (5 of 10, 5 misses) of a 'geuebt' entry: 'Sicher' on a later day is "besser"
     const seen = Array.from({ length: 4 }, () => s.recordAnswer(ev({ day: '2026-10-19' })).growth).flat();
-    expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, level: 'sicher' }]);
+    expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, level: 'sicher', carried: true }]);
     // and its seeded miss (on the last v2 day) is kept in a review days later
     const review = s.recordAnswer(ev({ day: '2026-10-20', purpose: 'review' }));
     expect(review.growth).toEqual([{ kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 5 }]);
   });
 
-  it('a v2 document without a usable recent list is not seeded; invalid v2 entries stay invalid', () => {
+  it('invalid v2 entries stay invalid (the seeding never repairs them)', () => {
     const d = v2();
     (d.skills['zahlen.runden#1'] as Record<string, unknown>).recent = ['ja'];
-    expect(migrateV2toV3(d).growth).toEqual({ stufen: expect.not.objectContaining({ 'zahlen.runden#1': expect.anything() }), errors: {}, facts: {} });
     expect(parseDocument(d)).toEqual({ ok: false, error: 'invalid' });
+    const text = JSON.stringify(v2()).replace('"skills":{', '"skills":{"__proto__":{"attempts":1,"recent":[false],"practiceDays":1,"state":"geuebt","box":0,"checks":[],"last":"2026-10-16"},');
+    expect(parseText(text)).toEqual({ ok: false, error: 'invalid' });
   });
 
-  it('does not let a __proto__ key into the seeded growth', () => {
-    const text = JSON.stringify(v2()).replace('"skills":{', '"skills":{"__proto__":{"attempts":1,"recent":[false],"practiceDays":1,"state":"geuebt","box":0,"checks":[],"last":"2026-10-16"},');
-    const migrated = migrateV2toV3(JSON.parse(text));
-    expect(Object.getPrototypeOf((migrated.growth as { stufen: object }).stufen)).toBe(Object.prototype);
-    expect(parseText(text)).toEqual({ ok: false, error: 'invalid' });
+  it('a v2 document that already carries a growth field (not from us) is seeded from its skills instead', () => {
+    const r = parseDocument({ ...v2(), growth: { stufen: { 'zahlen.runden#1': { earlyN: 10, earlyOk: 0, earlyWrong: 10, after: 10, improved: true, kept: 9 } }, errors: {}, facts: {} } });
+    expect(r.ok && r.state.growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15' });
   });
 
   it('a v1 document is migrated through v2 to v3', () => {
     const v1 = { ...v2(), version: 1, skills: { 'zahlen.runden#2': { attempts: 1, recent: [false], sessions: ['a'], state: 'geuebt', box: 0, checks: [], last: '2026-10-16' } } };
     const r = parseDocument(v1);
     expect(r.ok && r.state.version).toBe(3);
-    expect(r.ok && r.state.growth.stufen).toEqual({ 'zahlen.runden#2': { early: [false], earlyWrong: 1, after: 0, miss: '2026-10-16' } });
+    expect(r.ok && r.state.growth.stufen).toEqual({ 'zahlen.runden#2': { earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: '2026-10-16' } });
   });
 
   it('round trip keeps the growth data exactly', () => {
@@ -258,61 +261,69 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
   });
 });
 
-describe('validation of the improvement tracking', () => {
+describe('validation of the improvement tracking: derived data never makes stored progress unloadable', () => {
   const base = () => doc(grownState());
   type G = { stufen: Record<string, Record<string, unknown>>; errors: Record<string, Record<string, Record<string, unknown>>>; facts: Record<string, unknown> };
   const g = (d: Record<string, unknown>) => d.growth as G;
   const stufe = (d: Record<string, unknown>) => g(d).stufen['zahlen.runden#1'];
+  const parsedGrowth = (d: Record<string, unknown>) => {
+    const r = parseDocument(d);
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error('not ok');
+    // everything else is untouched
+    expect(r.state.skills).toEqual(grownState().skills);
+    expect(r.state.badges).toEqual(grownState().badges);
+    return r.state.growth;
+  };
 
-  const cases: Array<[string, (d: Record<string, unknown>) => unknown]> = [
-    ['growth missing (a v3 document always has it)', (d) => delete d.growth],
-    ['growth not an object', (d) => (d.growth = [])],
-    ['stufen missing', (d) => delete (d.growth as Record<string, unknown>).stufen],
-    ['bad skill key', (d) => (g(d).stufen['zahlen.runden#7'] = stufe(d))],
-    ['early with strings', (d) => (stufe(d).early = ['ja'])],
-    ['after above 10', (d) => (stufe(d).after = 11)],
-    ['after negative', (d) => (stufe(d).after = -1)],
-    ['earlyDay not a day', (d) => (stufe(d).earlyDay = 'gestern')],
-    ['miss not a day', (d) => (stufe(d).miss = 20261019)],
-    ['kept fractional', (d) => (stufe(d).kept = 1.5)],
-    ['errors for an unknown topic', (d) => (g(d).errors['musik.noten'] = {})],
-    ['errors not an object', (d) => (g(d).errors['zahlen.runden'] = [] as unknown as Record<string, Record<string, unknown>>)],
-    ['non-canonical fact key', (d) => (g(d).facts['6x4'] = '2026-10-19')],
-    ['fact miss not a day', (d) => (g(d).facts['4x6'] = true)],
-  ];
-
-  it.each(cases)('%s → invalid', (_name, mutate) => {
-    const d = base();
-    mutate(d);
-    expect(parseDocument(d)).toEqual({ ok: false, error: 'invalid' });
+  it('a missing or broken growth is rebuilt from the skills', () => {
+    for (const bad of [undefined, null, [], 'kaputt', 3]) {
+      const d = base();
+      d.growth = bad;
+      expect(parsedGrowth(d), String(bad)).toEqual(seedGrowth(grownState().skills));
+    }
   });
 
-  it('tags are a detail: re-normalised, merged, trimmed or dropped, never a reason to reject stored progress', () => {
+  const dropped: Array<[string, (d: Record<string, unknown>) => unknown, (gr: ReturnType<typeof parsedGrowth>) => void]> = [
+    ['stufen missing', (d) => delete (d.growth as Record<string, unknown>).stufen, (gr) => expect(gr.stufen).toEqual({})],
+    ['a bad skill key', (d) => (g(d).stufen['zahlen.runden#7'] = stufe(d)), (gr) => expect(gr.stufen['zahlen.runden#7']).toBeUndefined()],
+    ['an entry without a skill entry (orphan)', (d) => (g(d).stufen['geometrie.flaeche#2'] = stufe(d)), (gr) => expect(gr.stufen['geometrie.flaeche#2']).toBeUndefined()],
+    ['earlyN not a count', (d) => (stufe(d).earlyN = 'zehn'), (gr) => expect(gr.stufen['zahlen.runden#1']).toBeUndefined()],
+    ['after negative', (d) => (stufe(d).after = -1), (gr) => expect(gr.stufen['zahlen.runden#1']).toBeUndefined()],
+    ['after above 10 (clamped)', (d) => (stufe(d).after = 11), (gr) => expect(gr.stufen['zahlen.runden#1'].after).toBe(10)],
+    ['earlyOk above earlyN (clamped)', (d) => (stufe(d).earlyOk = 99), (gr) => expect(gr.stufen['zahlen.runden#1'].earlyOk).toBe(gr.stufen['zahlen.runden#1'].earlyN)],
+    ['miss not a day (field dropped)', (d) => (stufe(d).miss = 20261019), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('miss')],
+    ['earlyDay while the window is not full (field dropped)', (d) => (stufe(d).earlyDay = '2026-10-19'), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('earlyDay')],
+    ['kept fractional (field dropped)', (d) => (stufe(d).kept = 1.5), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('kept')],
+    ['improved not true (field dropped)', (d) => (stufe(d).improved = '2026-10-19'), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('improved')],
+    ['errors for an unknown topic', (d) => (g(d).errors['musik.noten'] = {}), (gr) => expect(gr.errors['musik.noten']).toBeUndefined()],
+    ['errors of a skill without entries', (d) => (g(d).errors['geometrie.flaeche'] = { x: { day: '2026-10-19', seen: 2, run: 5, done: '2026-10-20' } }), (gr) => expect(gr.errors['geometrie.flaeche']).toBeUndefined()],
+    ['errors not an object', (d) => (g(d).errors['zahlen.runden'] = [] as unknown as Record<string, Record<string, unknown>>), (gr) => expect(gr.errors['zahlen.runden']).toBeUndefined()],
+    ['a non-canonical fact key', (d) => (g(d).facts['6x4'] = '2026-10-19'), (gr) => expect(gr.facts).toEqual({ '4x6': '2026-10-22' })],
+    ['a fact miss that is not a day', (d) => (g(d).facts['4x6'] = true), (gr) => expect(gr.facts).toEqual({})],
+  ];
+
+  it.each(dropped)('%s → dropped or clamped, the rest loads', (_name, mutate, check) => {
+    const d = base();
+    mutate(d);
+    check(parsedGrowth(d));
+  });
+
+  it('tags are re-normalised, merged, trimmed or dropped', () => {
     const d = base();
     const errors = g(d).errors['zahlen.runden'];
     errors['abrunden-3'] = { day: '2026-10-25', seen: 1, run: 2 }; // merges with 'abrunden' (later day, more evidence)
     errors['ein tag'] = { day: '2026-10-19', seen: 1, run: 0 }; // dropped
     errors.ohneTag = { seen: 1, run: 0 }; // no day: dropped
-    errors.kaputt = { day: '2026-10-19', seen: 1, run: 0, done: 'ja' }; // bad done: dropped
+    errors.kaputt = { day: '2026-10-19', seen: 1, run: 0, done: 'ja' }; // bad done: the field is dropped
     errors.lauf = { day: '2026-10-19', seen: 7, run: 9 }; // clamped to the current limits
-    for (let i = 0; i < 9; i++) errors[`extra${'abcdefghi'[i]}x`] = { day: `2026-09-0${i + 1}`, seen: 1, run: 0 };
-    const r = parseDocument(d);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    const tracks = r.state.growth.errors['zahlen.runden'];
-    expect(Object.keys(tracks)).toHaveLength(8);
+    for (let i = 0; i < 14; i++) errors[`extra${'abcdefghijklmn'[i]}x`] = { day: `2026-09-${String(i + 1).padStart(2, '0')}`, seen: 1, run: 0 };
+    const tracks = parsedGrowth(d).errors['zahlen.runden'];
+    expect(Object.keys(tracks)).toHaveLength(12);
     expect(tracks.abrunden).toEqual({ day: '2026-10-25', seen: 1, run: 2 });
     expect(tracks.lauf).toEqual({ day: '2026-10-19', seen: 2, run: 5 });
-    for (const gone of ['ein tag', 'ohneTag', 'kaputt', 'abrunden-3', 'extraax']) expect(tracks[gone], gone).toBeUndefined();
-  });
-
-  it('cuts an over-long early window to its first 10 and drops a zero kept count', () => {
-    const d = base();
-    stufe(d).early = [true, ...Array(14).fill(false)];
-    stufe(d).kept = 0;
-    const r = parseDocument(d);
-    expect(r.ok && r.state.growth.stufen['zahlen.runden#1'].early).toEqual([true, ...Array(9).fill(false)]);
-    expect(r.ok && 'kept' in r.state.growth.stufen['zahlen.runden#1']).toBe(false);
+    expect(tracks.kaputt).toEqual({ day: '2026-10-19', seen: 1, run: 0 });
+    for (const gone of ['ein tag', 'ohneTag', 'abrunden-3', 'extraax']) expect(tracks[gone], gone).toBeUndefined();
   });
 });
 

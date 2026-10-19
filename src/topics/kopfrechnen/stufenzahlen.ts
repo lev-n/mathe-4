@@ -75,8 +75,9 @@ export function plusMinus(x: number, op: '+' | '-', y: number, u: number, stufe:
     hints: [`Rechne mit den ${name}n wie mit Einern: ${x / u} ${sym} ${y / u}.`, carry ? (op === '+' ? `Achte auf den Übergang: 10 ${name} sind eine Stufe mehr.` : 'Achte auf den Übergang: Du musst entbündeln.') : 'Hänge die Nullen danach wieder an.'],
     steps: [`${x / u} ${sym} ${y / u} = ${v / u}`, `Also ${v / u} ${name}: ${fmt(x)} ${sym} ${fmt(y)} = ${fmt(v)}`],
     bugs: bugList(v, [
-      // minus: the child did regroup (e.g. 13 − 4 = 9) but kept the next place unchanged (7900 instead of 6900)
-      ['uebertrag-vergessen', carry ? (op === '+' ? v - 10 * u : v + 10 * u) : null, op === '+' ? `${dx} + ${dy} ist mehr als 9. Denk an den Übertrag.` : `Du hast einen ${next} entbündelt. Dann ist bei den ${next}n einer weniger.`],
+      // plus: the carry was forgotten. minus: the child did regroup (e.g. 13 − 4 = 9) but kept the next place unchanged
+      // (7900 instead of 6900); a different misconception, so a different id (src/topics/errorFamilies.ts).
+      [op === '+' ? 'uebertrag-vergessen' : 'entbuendeln-vergessen', carry ? (op === '+' ? v - 10 * u : v + 10 * u) : null, op === '+' ? `${dx} + ${dy} ist mehr als 9. Denk an den Übertrag.` : `Du hast einen ${next} entbündelt. Dann ist bei den ${next}n einer weniger.`],
       ['kleiner-minus-groesser', op === '-' && carry ? Math.floor(x / (10 * u)) * 10 * u + (dy - dx) * u : null, `Bei den ${name}n darfst du nicht einfach ${dy} ${MINUS} ${dx} rechnen. Entbündle.`],
     ]),
     praise: carry ? 'Du hast den Übergang richtig beachtet.' : `Du hast mit den ${name}n wie mit Einern gerechnet.`,

@@ -132,7 +132,7 @@ function basketball(rng: Rng, who: Person): Problem {
     steps: [`${t} ${TIMES} 2 = ${2 * t}`, `${d} ${TIMES} 3 = ${3 * d}`, `${2 * t} + ${3 * d} = ${value}`],
     bugs: [
       { id: 'koerbe', match: t + d, hint: 'Du hast die Körbe gezählt. Jeder Korb bringt 2 oder 3 Punkte.' },
-      { id: 'alle-2', match: 2 * (t + d), hint: 'Manche Körbe zählen 3 Punkte.' },
+      { id: 'alle-zwei-punkte', match: 2 * (t + d), hint: 'Manche Körbe zählen 3 Punkte.' },
     ],
     hints: ['Wie viele Punkte bringen die 2-Punkte-Körbe?', 'Wie viele Punkte bringen die 3-Punkte-Körbe?'],
     emoji: '🏀', ab: 1, kmk: ['ZO.sachrechnen'],

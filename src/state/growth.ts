@@ -12,7 +12,8 @@
  *   4. besser   – a hard start (≤ HARD_START_MAX of the first 10 first-try correct, with ≥ HARD_START_MIN_WRONG wrong
  *                 attempts) and, on a later day than the end of that early window, either the last 10 (not
  *                 overlapping the first 10) are ≥ IMPROVE_MIN_GAIN better and ≥ IMPROVE_MIN_RECENT, or a first-try
- *                 answer at 'sicher'/'gemeistert'. Once per skill-Stufe.
+ *                 answer at 'sicher'/'gemeistert'. Once per skill-Stufe. (A low early window partly regresses to the
+ *                 mean by chance; the numbers shown are still true. A pilot heuristic, docs/research.md §7.2.)
  *   5. behalten – a task type the child once got wrong (the skill-Stufe, or the Einmaleins fact) solved first try in
  *                 a spaced review (the scheduler picks those items) ≥ LASTING_MIN_DAYS after the last miss.
  *
@@ -22,13 +23,14 @@
  * box; every badge is earned once. Nothing compares the child with anyone else. Thresholds are heuristics to tune
  * in a pilot (docs/research.md §7.2).
  *
- * Stored data (ProgressState.growth) is aggregate only: first-try flags, counts and days (P1).
+ * Stored data (ProgressState.growth) is aggregate only: counts, error-family tags and days (P1). Stored days are
+ * clamped to the current day when read, so a device clock that was set ahead once cannot block detection for months.
  */
 import type { Stufe } from '../core/types';
 import { daysBetween } from './dates';
 import { normalizeFactKey } from './facts';
 import { RECENT_SIZE, feedsRecent, isAtLeastSicher, parseSkillKey } from './mastery';
-import type { AnswerEvent, Day, ErrorTrack, Growth, GrowthEvent, GrowthStufe, MasteryState, ProgressState, RoundPurpose } from './types';
+import type { AnswerEvent, Day, ErrorTrack, Growth, GrowthEvent, GrowthStufe, MasteryState, ProgressState, RoundPurpose, StufeProgress } from './types';
 
 /** Size of the early window (the first answers) and of the recent window it is compared with. */
 export const GROWTH_WINDOW = RECENT_SIZE;
@@ -38,8 +40,8 @@ export const HARD_START_MAX = 6;
 export const HARD_START_MIN_WRONG = 3;
 /** "Besser geworden": the last 10 are at least this much better than the first 10 … */
 export const IMPROVE_MIN_GAIN = 3;
-/** … and at least this many of the last 10 are first-try correct. */
-export const IMPROVE_MIN_RECENT = 7;
+/** … and at least this many of the last 10 are first-try correct (the 'Sicher' level). */
+export const IMPROVE_MIN_RECENT = 8;
 /** The progress view shows a gain from this size on (gentler than the badge, never a decline). */
 export const VIEW_MIN_GAIN = 2;
 /** Tasks in which an error must have happened before it can be overcome (one slip is not an error pattern). */
@@ -48,8 +50,8 @@ export const ERROR_MIN_SEEN = 2;
 export const OVERCOME_RUN = 5;
 /** Days between the last miss and the spaced review for a lasting improvement (= the spaced-check gap). */
 export const LASTING_MIN_DAYS = 3;
-/** Tags kept per skill (the oldest are dropped first). */
-export const MAX_TAGS_PER_SKILL = 8;
+/** Tags kept per skill (single slips are dropped first, overcome errors last). */
+export const MAX_TAGS_PER_SKILL = 12;
 /** Tags taken from one exercise. */
 export const MAX_TAGS_PER_ANSWER = 12;
 /** Known mistakes recorded per item (1st and 2nd attempt). */
@@ -99,22 +101,56 @@ export function emptyGrowth(): Growth {
   return { stufen: {}, errors: {}, facts: {} };
 }
 
+export function emptyGrowthStufe(): GrowthStufe {
+  return { earlyN: 0, earlyOk: 0, earlyWrong: 0, after: 0 };
+}
+
+/**
+ * Tracking seeded from progress saved before it existed (v2, or a document without `growth`): every skill-Stufe
+ * starts its early window with its `recent` results, the closest to its start that is known (`carried` when there
+ * were more answers). Only Stufen still 'geuebt' (still being learned) keep their misses: as wrong attempts (v2 did
+ * not tell them from help) and as `miss` on their last day, an upper bound of the real miss day, so "days later" is
+ * never overstated. 'sicher'/'gemeistert' Stufen get a closed window without misses (never a hard start), so old or
+ * help-only misses cannot turn into a wave of rewards right after an update.
+ */
+export function seedGrowth(skills: Readonly<Record<string, StufeProgress>>): Growth {
+  const growth = emptyGrowth();
+  for (const [key, p] of Object.entries(skills)) {
+    if (!parseSkillKey(key) || p.recent.length === 0) continue;
+    const early = p.recent.slice(-GROWTH_WINDOW);
+    const learning = p.state === 'geuebt';
+    const misses = learning ? early.filter((r) => !r).length : 0;
+    const g: GrowthStufe = { earlyN: early.length, earlyOk: countTrue(early), earlyWrong: misses, after: 0 };
+    if (g.earlyN === GROWTH_WINDOW && p.last) g.earlyDay = p.last;
+    if (p.attempts > early.length) g.carried = true;
+    if (misses > 0 && p.last) g.miss = p.last;
+    growth.stufen[key] = g;
+  }
+  return growth;
+}
+
 const countTrue = (xs: readonly boolean[]) => xs.filter(Boolean).length;
 /** Own entries only (tags such as 'constructor' must not find inherited properties). */
 const own = <T>(record: Record<string, T>, key: string): T | undefined => (Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined);
-const laterDay = (a: Day | undefined, b: Day): Day => (a !== undefined && a > b ? a : b);
 
 /**
- * At most MAX_TAGS_PER_SKILL tracks. Open tracks with the oldest error go first (never one just updated by
- * `keep`); overcome ones only when nothing else is left, so an overcome error does not become earnable again.
+ * At most MAX_TAGS_PER_SKILL tracks. Dropped first: single slips (not yet an error pattern), then errors with the
+ * shortest clean run, older ones first; overcome errors last (so they never become earnable again); never a tag
+ * in `keep` (just updated).
  */
 export function capTracks(tracks: Record<string, ErrorTrack>, keep: readonly string[] = []): Record<string, ErrorTrack> {
   const keys = Object.keys(tracks);
   if (keys.length <= MAX_TAGS_PER_SKILL) return tracks;
-  const priority = (k: string) => (keep.includes(k) ? 2 : tracks[k].done ? 1 : 0);
-  const order = [...keys].sort((a, b) => priority(b) - priority(a) || (tracks[a].day < tracks[b].day ? 1 : tracks[a].day > tracks[b].day ? -1 : 0));
+  const priority = (k: string) => (keep.includes(k) ? 4 : tracks[k].done ? 3 : tracks[k].seen >= ERROR_MIN_SEEN ? 2 : 1);
+  const order = [...keys].sort(
+    (a, b) =>
+      priority(b) - priority(a) || tracks[b].run - tracks[a].run || (tracks[a].day < tracks[b].day ? 1 : tracks[a].day > tracks[b].day ? -1 : 0),
+  );
   return Object.fromEntries(order.slice(0, MAX_TAGS_PER_SKILL).map((k) => [k, tracks[k]]));
 }
+
+/** A stored day, but never later than `day` (a device clock that was ahead once must not block detection). */
+const notAfter = (stored: Day | undefined, day: Day): Day | undefined => (stored !== undefined && stored > day ? day : stored);
 
 /** Kind 3: the error tracks of the answer's skill. */
 function updateErrors(tracks: Record<string, ErrorTrack>, event: AnswerEvent, day: Day, events: GrowthEvent[]): Record<string, ErrorTrack> {
@@ -126,7 +162,7 @@ function updateErrors(tracks: Record<string, ErrorTrack>, event: AnswerEvent, da
     const t = own(next, hit);
     // Overcome stays overcome (no second note or badge for the same error); otherwise count from here.
     if (t?.done) continue;
-    next[hit] = { day: laterDay(t?.day, day), seen: Math.min(ERROR_MIN_SEEN, (t?.seen ?? 0) + 1), run: 0 };
+    next[hit] = { day, seen: Math.min(ERROR_MIN_SEEN, (t?.seen ?? 0) + 1), run: 0 };
   }
   const wrong = hadWrongAttempt(event);
   for (const tag of offered) {
@@ -135,8 +171,8 @@ function updateErrors(tracks: Record<string, ErrorTrack>, event: AnswerEvent, da
     // First try: one more clean task. A wrong attempt (another mistake) breaks the run; help alone neither counts
     // nor breaks it (the error itself did not happen).
     const run = event.firstTry ? Math.min(OVERCOME_RUN, t.run + 1) : wrong ? 0 : t.run;
-    const updated: ErrorTrack = { ...t, run };
-    if (run >= OVERCOME_RUN && day > t.day) {
+    const updated: ErrorTrack = { ...t, day: notAfter(t.day, day)!, run };
+    if (run >= OVERCOME_RUN && day > updated.day) {
       updated.done = day;
       events.push({ kind: 'fehler', skillId: event.skillId, stufe: event.stufe, tag, run });
     }
@@ -157,38 +193,43 @@ function updateStufe(
   facts: Record<string, Day>,
   events: GrowthEvent[],
 ): GrowthStufe {
-  const g: GrowthStufe = prev ? { ...prev, early: [...prev.early] } : { early: [], after: 0 };
+  const g: GrowthStufe = prev ? { ...prev } : emptyGrowthStufe();
+  if (g.earlyDay !== undefined) g.earlyDay = notAfter(g.earlyDay, day);
+  if (g.miss !== undefined) g.miss = notAfter(g.miss, day);
   const wrong = hadWrongAttempt(event);
   if (feedsRecent(event.purpose)) {
-    if (g.early.length < GROWTH_WINDOW) {
-      g.early.push(event.firstTry);
-      if (wrong) g.earlyWrong = (g.earlyWrong ?? 0) + 1;
-      if (g.early.length === GROWTH_WINDOW) g.earlyDay = day;
+    if (g.earlyN < GROWTH_WINDOW) {
+      g.earlyN += 1;
+      if (event.firstTry) g.earlyOk += 1;
+      if (wrong) g.earlyWrong += 1;
+      if (g.earlyN === GROWTH_WINDOW) g.earlyDay = day;
     } else {
       g.after = Math.min(GROWTH_WINDOW, g.after + 1);
     }
   }
+  const disjoint = g.after >= GROWTH_WINDOW && recent.length >= GROWTH_WINDOW;
+  const last = disjoint ? countTrue(recent.slice(-GROWTH_WINDOW)) : undefined;
+  if (last !== undefined && last > (g.best ?? -1)) g.best = last;
 
   // Kind 4: a hard start, then clearly better on a later day (or a first-try answer at a new mastery level:
   // 'sicher' reached on the day of the hard start counts once the next day confirms it).
   if (!g.improved && isHardStart(g) && g.earlyDay !== undefined && day > g.earlyDay) {
-    const early = countTrue(g.early);
-    const disjoint = g.after >= GROWTH_WINDOW && recent.length >= GROWTH_WINDOW;
-    const last = disjoint ? countTrue(recent.slice(-GROWTH_WINDOW)) : undefined;
+    const early = g.earlyOk;
     const gain = last !== undefined && last >= early + IMPROVE_MIN_GAIN && last >= IMPROVE_MIN_RECENT;
     const rose = event.firstTry && isAtLeastSicher(after);
     if (gain || rose) {
-      g.improved = day;
+      g.improved = true;
       const e: GrowthEvent = { kind: 'besser', skillId: event.skillId, stufe: event.stufe, early };
       if (last !== undefined) e.recent = last;
       if (rose) e.level = after as 'sicher' | 'gemeistert';
+      if (g.carried) e.carried = true;
       events.push(e);
     }
   }
 
   // Kind 5: a once-missed task type solved first try in a spaced review days later.
   const factKey = normalizeFactKey(event.factKey);
-  const missed = factKey ? own(facts, factKey) : g.miss;
+  const missed = factKey ? notAfter(own(facts, factKey), day) : g.miss;
   const review = event.purpose === 'review';
   // A wrong attempt arms it while the Stufe is still being learned, or when it cost a Leitner box (a review or a
   // mixed answer on a scheduled Stufe; every fact miss lowers the fact's box). A slip in a practice round on a Stufe
@@ -205,15 +246,15 @@ function updateStufe(
     g.kept = (g.kept ?? 0) + 1;
     events.push(e);
   } else if (arms) {
-    if (factKey) facts[factKey] = laterDay(own(facts, factKey), day);
-    else g.miss = laterDay(g.miss, day);
+    if (factKey) facts[factKey] = day;
+    else g.miss = day;
   }
   return g;
 }
 
 /** "Knifflig am Anfang": the first 10 had at most HARD_START_MAX first-try correct and real wrong attempts. */
 export function isHardStart(g: GrowthStufe): boolean {
-  return g.early.length === GROWTH_WINDOW && countTrue(g.early) <= HARD_START_MAX && (g.earlyWrong ?? 0) >= HARD_START_MIN_WRONG;
+  return g.earlyN === GROWTH_WINDOW && g.earlyOk <= HARD_START_MAX && g.earlyWrong >= HARD_START_MIN_WRONG;
 }
 
 export interface AppliedGrowth {
@@ -243,7 +284,7 @@ export function applyGrowth(prev: ProgressState, next: ProgressState, event: Ans
 
 // ─── Badges ─────────────────────────────────────────────────────────────────
 
-/** Improvement counts for the badges (NRW extras never count). */
+/** Improvement counts for the badges (NRW extras never count, nor tracking without a skill entry). */
 export interface GrowthFacts {
   /** Errors overcome (skill + tag). */
   overcome: number;
@@ -251,33 +292,36 @@ export interface GrowthFacts {
   improved: number;
   /** Lasting improvements in total. */
   kept: number;
-  /** Distinct skills with at least one lasting improvement. */
-  keptSkills: number;
+  /** Distinct topics with at least one lasting improvement. */
+  keptTopics: number;
 }
 
-function optionalSkill(state: ProgressState, skillId: string): boolean {
-  return ([1, 2, 3] as Stufe[]).some((s) => state.skills[`${skillId}#${s}`]?.optional === true);
+/** The skill has at least one entry, and none of its entries is an optional NRW extra. */
+function countsForBadges(state: ProgressState, skillId: string): boolean {
+  const entries = ([1, 2, 3] as Stufe[]).map((s) => own(state.skills, `${skillId}#${s}`)).filter((p) => p !== undefined);
+  return entries.length > 0 && entries.every((p) => p.optional !== true);
 }
 
 export function growthFacts(state: ProgressState): GrowthFacts {
   let improved = 0;
   let kept = 0;
-  const keptSkills = new Set<string>();
+  const keptTopics = new Set<string>();
   for (const [key, g] of Object.entries(state.growth.stufen)) {
     const parsed = parseSkillKey(key);
-    if (!parsed || state.skills[key]?.optional === true) continue;
+    const entry = own(state.skills, key);
+    if (!parsed || !entry || entry.optional === true) continue;
     if (g.improved) improved += 1;
     if ((g.kept ?? 0) > 0) {
       kept += g.kept ?? 0;
-      keptSkills.add(parsed.skillId);
+      keptTopics.add(parsed.topicId);
     }
   }
   let overcome = 0;
   for (const [skillId, tracks] of Object.entries(state.growth.errors)) {
-    if (optionalSkill(state, skillId)) continue;
+    if (!countsForBadges(state, skillId)) continue;
     overcome += Object.values(tracks).filter((t) => t.done !== undefined).length;
   }
-  return { overcome, improved, kept, keptSkills: keptSkills.size };
+  return { overcome, improved, kept, keptTopics: keptTopics.size };
 }
 
 // ─── Round summary ──────────────────────────────────────────────────────────
@@ -344,12 +388,17 @@ export function roundNotes(finished: readonly NoteItem[], events: readonly Growt
 
 export interface StufeGrowthView {
   stufe: Stufe;
-  /** First 10 vs last 10 (not overlapping), shown only when the last 10 are ≥ VIEW_MIN_GAIN better. */
-  window?: { early: number; recent: number };
-  /** A hard start and now this mastery state. */
+  /**
+   * First 10 vs the best last 10 after them (not overlapping), shown when that is ≥ VIEW_MIN_GAIN better. `best`
+   * never goes down, so a line once shown never shrinks or disappears (nothing can be lost, M13).
+   */
+  window?: { early: number; best: number };
+  /** A hard start and now this mastery state (mastery never goes down). */
   level?: 'sicher' | 'gemeistert';
   /** First-try correct answers of the hard start (with `level`). */
   early?: number;
+  /** The early window comes from progress saved before the tracking existed: say "Früher", not "Am Anfang". */
+  carried?: true;
   /** Lasting improvements. */
   kept: number;
 }
@@ -365,23 +414,19 @@ export function growthView(state: ProgressState, skillId: string): SkillGrowthVi
   const stufen: StufeGrowthView[] = [];
   for (const s of [1, 2, 3] as Stufe[]) {
     const key = `${skillId}#${s}`;
-    const g = state.growth.stufen[key];
-    const p = state.skills[key];
+    const g = own(state.growth.stufen, key);
+    const p = own(state.skills, key);
     if (!g || !p) continue;
     const view: StufeGrowthView = { stufe: s, kept: g.kept ?? 0 };
-    const full = g.early.length === GROWTH_WINDOW;
-    const early = countTrue(g.early);
-    if (full && g.after >= GROWTH_WINDOW && p.recent.length >= GROWTH_WINDOW) {
-      const recent = countTrue(p.recent.slice(-GROWTH_WINDOW));
-      if (recent >= early + VIEW_MIN_GAIN) view.window = { early, recent };
-    }
+    if (g.earlyN === GROWTH_WINDOW && g.best !== undefined && g.best >= g.earlyOk + VIEW_MIN_GAIN) view.window = { early: g.earlyOk, best: g.best };
     if (isHardStart(g) && isAtLeastSicher(p.state)) {
       view.level = p.state as 'sicher' | 'gemeistert';
-      view.early = early;
+      view.early = g.earlyOk;
     }
+    if (g.carried && (view.window || view.level)) view.carried = true;
     if (view.window || view.level || view.kept > 0) stufen.push(view);
   }
-  const tracks = state.growth.errors[skillId] ?? {};
+  const tracks = own(state.growth.errors, skillId) ?? {};
   const overcome = Object.entries(tracks)
     .filter(([, t]) => t.done !== undefined)
     .sort(([, a], [, b]) => (a.done! < b.done! ? 1 : a.done! > b.done! ? -1 : 0))

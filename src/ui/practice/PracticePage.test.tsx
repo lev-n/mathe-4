@@ -723,20 +723,24 @@ describe('PracticePage: improvements in the round summary', () => {
     expect(live()).toBe(
       '3 von 4 geschafft – 1 Aufgabe war noch knifflig. Das hast du verbessert: Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst. Eine Aufgabe hast du im zweiten Versuch selbst gelöst.',
     );
+    // the matched mistake is recorded as its error-library tag (no family for this test skill: the id itself)
+    const events = vi.mocked(store.recordAnswer).mock.calls.map((c) => c[0]);
+    expect(events[0]).toMatchObject({ bugTags: ['one-more'], bugIds: ['one-more'], wrongAttempt: true });
+    expect(events[2].bugIds).toBeUndefined();
   });
 
   it('an error overcome on a later day: shown first and emphasised, with its badge, only after the round', async () => {
     roundState.size = 5;
-    // Earlier (another day) the child made the "one row too many" mistake in this skill.
+    // Earlier (another day) the child made the "one row too many" mistake in this skill (tracking needs the skill entry).
+    practised();
     const st = store.get();
     store.importJson(serializeState({ ...st, growth: { ...st.growth, errors: { 'kopfrechnen.test': { 'one-more': { day: '2000-01-01', seen: 2, run: 0 } } } } }));
-    practised();
     await startSkillRound();
     for (let i = 0; i < 5; i++) {
       answer(String(solution()));
       prufen();
       // never during the round: no badge, no improvement note, nothing announced about it
-      expect(document.body.textContent).not.toMatch(/Fehler überwunden|Abzeichen|verbessert/);
+      expect(document.body.textContent).not.toMatch(/Stolperstein|Abzeichen|verbessert/);
       expect(live()).not.toMatch(/Abzeichen|verbessert/);
       weiter();
     }
@@ -744,12 +748,12 @@ describe('PracticePage: improvements in the round summary', () => {
     expect(document.activeElement).toBe(heading);
     const section = improved()!;
     const lines = within(section).getAllByRole('listitem');
-    expect(lines.map((li) => li.textContent)).toEqual(['Testeinmaleins: Du hast einen Fehler, der dir vorher passiert war, jetzt fünfmal vermieden.']);
+    expect(lines.map((li) => li.textContent)).toEqual(['Testeinmaleins: Du hast die knifflige Stelle in diesen Aufgaben jetzt fünfmal richtig gelöst.']);
     expect(lines[0].className).toContain('is-big');
     expect(screen.getByRole('heading', { level: 3, name: 'Neues Abzeichen' })).toBeTruthy();
-    expect(screen.getByText('Fehler überwunden')).toBeTruthy();
+    expect(screen.getByText('Stolperstein überwunden')).toBeTruthy();
     expect(live()).toBe(
-      '5 von 5 geschafft. Das hast du verbessert: Testeinmaleins: Du hast einen Fehler, der dir vorher passiert war, jetzt fünfmal vermieden. Neues Abzeichen: Fehler überwunden.',
+      '5 von 5 geschafft. Das hast du verbessert: Testeinmaleins: Du hast die knifflige Stelle in diesen Aufgaben jetzt fünfmal richtig gelöst. Neues Abzeichen: Stolperstein überwunden.',
     );
     expect(store.get().badges['fehler-ueberwunden']).toBeDefined();
     expect(vi.mocked(store.recordAnswer).mock.calls.every((c) => c[0].bugTags?.[0] === 'one-more')).toBe(true);

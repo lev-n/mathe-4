@@ -21,7 +21,7 @@ describe('badge definitions', () => {
     const mastery = BADGES.filter((b) => !b.improvement);
     expect(mastery.length).toBeGreaterThanOrEqual(15);
     expect(mastery.length).toBeLessThanOrEqual(25);
-    expect(BADGES.filter((b) => b.improvement).map((b) => b.id)).toEqual(['fehler-ueberwunden', 'besser-geworden', 'behalten', 'lange-behalten']);
+    expect(BADGES.filter((b) => b.improvement).map((b) => b.id)).toEqual(['fehler-ueberwunden', 'besser-geworden', 'behalten', 'vieles-behalten']);
     expect(new Set(BADGES.map((b) => b.id)).size).toBe(BADGES.length);
     expect(new Set(BADGES.map((b) => b.title)).size).toBe(BADGES.length);
   });

@@ -304,12 +304,13 @@ describe('ProgressPage: "So hast du dich verbessert"', () => {
     });
     s.growth = {
       stufen: {
-        'zahlen.runden#1': { early: [true, false, true, false, true, false, true, false, false, false], earlyDay: '2026-10-10', after: 10 },
-        'zahlen.runden#2': { early: [false, false, true, false, true, false, true, false, false, true], earlyWrong: 6, earlyDay: '2026-10-11', after: 4, kept: 1 },
+        'zahlen.runden#1': { earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: '2026-10-10', after: 10, best: 9 },
+        'zahlen.runden#2': { earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: '2026-10-11', after: 4, kept: 1 },
         // got worse: never shown
-        'zahlen.stellenwert#1': { early: [true, true, true, false, false, true, true, false, false, false], earlyDay: '2026-10-12', after: 10 },
+        'zahlen.stellenwert#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-12', after: 10, best: 1 },
       },
-      errors: { 'schriftlich.plus': { 'add.no-carry': { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' }, 'add.misaligned': { day: '2026-10-13', seen: 2, run: 2 } } },
+      // stored tags are misconception families (src/topics/errorFamilies.ts)
+      errors: { 'schriftlich.plus': { uebertrag: { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' }, stellengerecht: { day: '2026-10-13', seen: 2, run: 2 } } },
       facts: {},
     };
     return s;
@@ -324,7 +325,7 @@ describe('ProgressPage: "So hast du dich verbessert"', () => {
     const skills = within(growth).getAllByRole('listitem').filter((li) => li.classList.contains('progress-growth__skill'));
     expect(skills.map((li) => li.querySelector('.progress-growth__name')!.textContent)).toEqual(['Runden']);
     expect(within(skills[0]).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Stufe 1: Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10.',
+      'Stufe 1: Am Anfang 4 von 10 auf Anhieb, später 9 von 10.',
       'Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt „Sicher“.',
       'Stufe 2: Etwas, das vorher knifflig war, hast du Tage später in der Wiederholung auf Anhieb gelöst.',
     ]);
@@ -333,7 +334,41 @@ describe('ProgressPage: "So hast du dich verbessert"', () => {
     const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
     const lines = within(within(schriftlich).getByRole('region', { name: 'So hast du dich verbessert' })).getAllByRole('listitem').map((li) => li.textContent);
     expect(lines).toContain('Du hast den Übertrag fünfmal richtig beachtet.');
-    expect(lines.join(' ')).not.toMatch(/misaligned|Untereinander/);
+    // not yet overcome: nothing is said about it
+    expect(lines.join(' ')).not.toMatch(/stellengerecht|untereinander/i);
+  });
+
+  it('an overcome error in written subtraction is worded for the child’s subtraction method', async () => {
+    const withMethod = (subtractionMethod: 'abziehen' | 'ergaenzen') => {
+      const s = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) }, { settings: { ...stateWith().settings, subtractionMethod } });
+      s.growth = { stufen: {}, errors: { 'schriftlich.plus': { entbuendeln: { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' } } }, facts: {} };
+      return s;
+    };
+    const lines = async () => {
+      const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
+      const growth = await within(schriftlich).findByRole('region', { name: 'So hast du dich verbessert' });
+      return within(growth).getAllByRole('listitem').map((li) => li.textContent);
+    };
+    current.state = withMethod('abziehen');
+    render(<ProgressPage />);
+    expect(await lines()).toContain('Du hast das Entbündeln fünfmal richtig gemacht.');
+    cleanup();
+    current.state = withMethod('ergaenzen');
+    render(<ProgressPage />);
+    expect(await lines()).toContain('Du hast das Erweitern mit der gemerkten 1 fünfmal richtig gemacht.');
+  });
+
+  it('a tag without a family still gets a calm, positive line (said once)', async () => {
+    const s = stateWith({ 'schriftlich.plus#1': progress('sicher', { recent: T }) });
+    const done = { day: '2026-10-12', seen: 2, run: 5, done: '2026-10-14' };
+    s.growth = { stufen: {}, errors: { 'schriftlich.plus': { 'neu.fehler': done, 'noch-neuer': { ...done, done: '2026-10-15' } } }, facts: {} };
+    current.state = s;
+    render(<ProgressPage />);
+    const schriftlich = await screen.findByRole('region', { name: /Schriftlich/ });
+    const growth = await within(schriftlich).findByRole('region', { name: 'So hast du dich verbessert' });
+    expect([...growth.querySelectorAll('.progress-growth__lines li')].map((li) => li.textContent)).toEqual([
+      'Du hast die knifflige Stelle in diesen Aufgaben fünfmal richtig gelöst.',
+    ]);
   });
 
   it('shows nothing (no empty box, no pressure) without improvement', async () => {

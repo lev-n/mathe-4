@@ -16,6 +16,7 @@ import type { AnswerOutcome, BadgeDef, GrowthEvent, PracticePlan, RoundSlot } fr
 import { answerFields, firstEmptyRequiredField, firstWrongField, focusField, initialField, showRegion } from '../answers/fieldNav';
 import { coarsePointer, useKeypadEnabled } from '../keypad/Keypad';
 import { useSettings } from '../../state/useProgress';
+import { tagsFor } from '../../topics/errorFamilies';
 import { getTopicMeta } from '../../topics/registry';
 import BreakPrompt, { BREAK_AFTER_MS } from './BreakPrompt';
 import ConsentPrompt from './ConsentPrompt';
@@ -88,8 +89,9 @@ function metaOf(ex: Exercise, skill: SkillDef): ItemMeta {
   const meta: ItemMeta = { topicId: ex.topicId ?? skill.topicId, hintCount: ex.hints.length };
   if (ex.factKey) meta.factKey = ex.factKey;
   if (skill.optional === 'nrw') meta.optional = true;
-  // The typical errors this task offers: the improvement tracking counts them (src/state/growth.ts).
-  const bugTags = (ex.bugs ?? []).map((b) => b.id);
+  // The typical errors this task offers, as misconception families of the skill (src/topics/errorFamilies.ts):
+  // the improvement tracking counts them (src/state/growth.ts).
+  const bugTags = tagsFor(skill.id, (ex.bugs ?? []).map((b) => b.id));
   if (bugTags.length > 0) meta.bugTags = bugTags;
   return meta;
 }
@@ -326,6 +328,8 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
   const record = (f: FinishedItem) => {
     let outcome: AnswerOutcome | null = null;
     try {
+      // the matched Bugs as the same family tags as ItemMeta.bugTags
+      const bugIds = tagsFor(f.skillId, f.bugIds);
       outcome = store.recordAnswer({
         skillId: f.skillId,
         topicId: f.topicId,
@@ -339,7 +343,7 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
         day: today(),
         optional: f.optional,
         bugTags: f.bugTags,
-        bugIds: f.bugIds,
+        bugIds: bugIds.length > 0 ? bugIds : undefined,
         wrongAttempt: !f.solved || f.secondTry,
       });
     } catch (err) {
@@ -461,7 +465,7 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     const nextStufe = plan.mode === 'skill' && plan.stufe < 3 && suggest ? ((plan.stufe + 1) as Stufe) : null;
     const events: GrowthEvent[] = outcomes.current.flatMap(({ outcome }) => outcome?.growth ?? []);
     const titleOf = (id: string) => skillMap.get(id)?.title ?? id;
-    const notes: SummaryNote[] = roundNotes(s.finished, events).map((n, i) => ({ key: `${n.kind}-${i}`, text: noteText(n, titleOf), big: isBigNote(n) }));
+    const notes: SummaryNote[] = roundNotes(s.finished, events).map((n, i) => ({ key: `${n.kind}-${i}`, text: noteText(n, titleOf, st.settings.subtractionMethod), big: isBigNote(n) }));
     const badgeList = [...badges.values()];
     setSummary({ solved: sum.solved, answered: sum.answered, mastery: [...seen.values()], notes, badges: badgeList, nextStufe });
     setView('summary');

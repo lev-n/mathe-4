@@ -60,4 +60,14 @@ describe('groessen.laengen specifics', () => {
     expect(r.correct).toBe(false);
     expect(r.bugHint).toMatch(/0/);
   });
+
+  it('remaining distance: adding the walked part is its own bug id, not the comma bug "addiert"', () => {
+    const items = samples(laengenSkill, 3).filter((e) => e.key.includes(':weg:'));
+    expect(items.length).toBeGreaterThan(10);
+    for (const ex of items) {
+      const [, total, gone] = /:weg:(\d+):(\d+)$/.exec(ex.key)!.map(Number);
+      expect(ex.bugs?.find((b) => b.id === 'weg-addiert')?.match).toBe(total + gone);
+      expect(ex.bugs?.some((b) => b.id === 'addiert')).toBe(false);
+    }
+  });
 });

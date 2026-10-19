@@ -65,7 +65,7 @@ function GrowthList({ meta, mod, state }: { meta: TopicMeta; mod: TopicModule; s
   const items = visibleSkills(state, mod.skills)
     .map((skill) => {
       const view = growthView(state, skill.id);
-      return view ? { skill, lines: growthViewLines(view) } : null;
+      return view ? { skill, lines: growthViewLines(view, state.settings.subtractionMethod) } : null;
     })
     .filter((x): x is { skill: (typeof mod.skills)[number]; lines: string[] } => x !== null && x.lines.length > 0);
   if (items.length === 0) return null;

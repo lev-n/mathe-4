@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from './dates';
 import {
   ERROR_MIN_SEEN,
+  capTracks,
+  seedGrowth,
   HARD_START_MAX,
   MAX_ROUND_NOTES,
   MAX_TAGS_PER_ANSWER,
@@ -207,14 +209,20 @@ describe('kind 3: error overcome', () => {
 
 describe('kind 4: skill improved (first 10 vs last 10, or a new level after a hard start)', () => {
   it('a hard start, then clearly better on a later day → besser (window variant)', () => {
-    // D1: 4 of 10 first try, ending with misses; D2: 7 of 10 without ever reaching 'sicher'
-    const { s, outs } = play([...pattern('xxxx......', D1), ...pattern('xxx.xxx.x.', D2)]);
+    // D1: 4 of 10 first try, ending with misses; D2: 8 of 10 without ever reaching 'sicher'
+    const { s, outs } = play([...pattern('xxxx......', D1), ...pattern('xxxxx.xx.x', D2)]);
     const events = growthOf(outs);
-    expect(events).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, recent: 7 }]);
+    expect(events).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, recent: 8 }]);
     expect(growthOf(outs.slice(0, -1))).toEqual([]); // only when the windows no longer overlap
     expect(s.get().skills['zahlen.runden#1'].state).toBe('geuebt');
-    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ earlyDay: D1, after: 10, improved: D2 });
+    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: D1, after: 10, best: 8, miss: D2, improved: true });
     expect(badgeIds(outs)).toContain('besser-geworden');
+  });
+
+  it('a gain to 7 of 10 is shown on the progress page but is not yet "besser" (that needs the Sicher level, 8)', () => {
+    const { s, outs } = play([...pattern('xxxx......', D1), ...pattern('xxx.xxx.x.', D2)]);
+    expect(growthOf(outs)).toEqual([]);
+    expect(growthView(s.get(), 'zahlen.runden')?.stufen[0].window).toEqual({ early: 4, best: 7 });
   });
 
   it('a hard start, then Sicher on a later day → besser (level variant)', () => {
@@ -233,8 +241,7 @@ describe('kind 4: skill improved (first 10 vs last 10, or a new level after a ha
   it('anti-farming: pressing Tipp before every task is no hard start (help is not a mistake)', () => {
     const tipps = Array.from({ length: 10 }, () => ev({ day: D1, firstTry: false, solved: true, usedHint: true }));
     const { s, outs } = play([...tipps, ...pattern('xxxxxxxxxx', D2)]);
-    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ early: Array(10).fill(false), after: 10 });
-    expect(s.get().growth.stufen['zahlen.runden#1'].earlyWrong).toBeUndefined();
+    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ earlyN: 10, earlyOk: 0, earlyWrong: 0, after: 10 });
     expect(growthOf(outs)).toEqual([]);
     expect(badgeIds(outs)).not.toContain('besser-geworden');
   });
@@ -344,19 +351,20 @@ describe('kind 5: lasting improvement in a spaced review', () => {
     expect(s.get().growth.facts).toEqual({});
   });
 
-  it('"Lange behalten" (the largest badge) needs lasting improvements in three different skills', () => {
+  it('"Vieles behalten" (the largest badge) needs lasting improvements in three different topics', () => {
     const s = createStore(null);
-    const skills = ['zahlen.runden', 'zahlen.stellenwert', 'geometrie.flaeche'] as const;
+    // two skills of one topic count once
+    const skills = ['zahlen.runden', 'zahlen.stellenwert', 'geometrie.flaeche', 'daten.diagramme'] as const;
     const earned: string[] = [];
     skills.forEach((skillId, i) => {
-      const topicId = skillId.split('.')[0] as 'zahlen' | 'geometrie';
+      const topicId = skillId.split('.')[0] as 'zahlen' | 'geometrie' | 'daten';
       play([ev({ skillId, topicId, day: D1, firstTry: false }), ...Array.from({ length: 10 }, () => ev({ skillId, topicId, day: D1 }))], s);
       const out = s.recordAnswer(ev({ skillId, topicId, day: '2026-10-22', purpose: 'review' }));
       earned.push(...out.newBadges.map((b) => b.id));
-      if (i < 2) expect(earned).not.toContain('lange-behalten');
+      if (i < 3) expect(earned).not.toContain('vieles-behalten');
     });
-    expect(earned).toEqual(['behalten', 'lange-behalten']);
-    expect(growthFacts(s.get())).toMatchObject({ kept: 3, keptSkills: 3 });
+    expect(earned).toEqual(['behalten', 'vieles-behalten']);
+    expect(growthFacts(s.get())).toMatchObject({ kept: 4, keptTopics: 3 });
   });
 
   it('NRW extras are noted but never earn an improvement badge, not even at the end of the round', () => {
@@ -389,7 +397,7 @@ describe('applyGrowth', () => {
     const frozen = JSON.stringify(s0);
     const r = answer(s0, ev({ firstTry: false, bugTags: ['a'], bugIds: ['a'] }));
     expect(JSON.stringify(s0)).toBe(frozen);
-    expect(r.state.growth.stufen['zahlen.runden#1']).toEqual({ early: [false], earlyWrong: 1, after: 0, miss: D1 });
+    expect(r.state.growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: D1 });
     expect(r.state.growth.errors['zahlen.runden']).toEqual({ a: { day: D1, seen: 1, run: 0 } });
   });
 
@@ -454,7 +462,7 @@ describe('roundNotes', () => {
 describe('growthView', () => {
   it('shows a gain of ≥ 2 between the first and the last 10, never a decline', () => {
     const up = play([...pattern('xxxx......', D1), ...pattern('xxxxx.x...', D2)]).s.get(); // 4 → 6
-    expect(growthView(up, 'zahlen.runden')).toEqual({ stufen: [{ stufe: 1, window: { early: 4, recent: 6 }, kept: 0 }], overcome: [] });
+    expect(growthView(up, 'zahlen.runden')).toEqual({ stufen: [{ stufe: 1, window: { early: 4, best: 6 }, kept: 0 }], overcome: [] });
     const down = play([...pattern('xxxxxx....', D1), ...pattern('xxx.......', D2)]).s.get();
     expect(growthView(down, 'zahlen.runden')).toBeNull();
     expect(growthView(emptyState(), 'zahlen.runden')).toBeNull();
@@ -518,9 +526,12 @@ describe('random play keeps the tracking valid, bounded and loadable', () => {
         earned.push(...out.newBadges.map((b) => b.id));
         const st = s.get();
         for (const g of Object.values(st.growth.stufen)) {
-          expect(g.early.length).toBeLessThanOrEqual(10);
+          expect(g.earlyN).toBeLessThanOrEqual(10);
           expect(g.after).toBeLessThanOrEqual(10);
-          expect(g.earlyWrong ?? 0).toBeLessThanOrEqual(g.early.length);
+          expect(g.earlyOk).toBeLessThanOrEqual(g.earlyN);
+          expect(g.earlyWrong).toBeLessThanOrEqual(g.earlyN);
+          expect(g.best ?? 0).toBeLessThanOrEqual(10);
+          if (g.earlyDay) expect(g.earlyN).toBe(10);
         }
         for (const tracks of Object.values(st.growth.errors)) {
           expect(Object.keys(tracks).length).toBeLessThanOrEqual(MAX_TAGS_PER_SKILL);
@@ -543,5 +554,72 @@ describe('random play keeps the tracking valid, bounded and loadable', () => {
       }
       expect(new Set(earned).size).toBe(earned.length);
     }
+  });
+});
+
+describe('robustness: shown progress never shrinks, clocks, caps, orphans', () => {
+  it('the progress line keeps its best: a weaker round later never lowers or removes it (nothing can be lost)', () => {
+    const { s } = play([...pattern('xxxx......', D1), ...pattern('xxxxxxx...', D2)]); // 4 → 7
+    expect(growthView(s.get(), 'zahlen.runden')?.stufen[0].window).toEqual({ early: 4, best: 7 });
+    play(pattern('..........', D5), s); // a mixed-up day
+    expect(growthView(s.get(), 'zahlen.runden')?.stufen[0].window).toEqual({ early: 4, best: 7 });
+  });
+
+  it('a device clock that was ahead once does not block detection for months', () => {
+    const future = '2027-03-01';
+    const { s } = play([ev({ day: future, firstTry: false }), ...pattern('xxxxxxxxxx', D1)]);
+    // the stored miss is clamped to the answer's day …
+    expect(s.get().growth.stufen['zahlen.runden#1'].miss).toBe(D1);
+    // … so a review 3 days later counts again (never overstated: the true day is on or before it)
+    expect(s.recordAnswer(ev({ day: '2026-10-22', purpose: 'review' })).growth.map((g) => g.kind)).toEqual(['behalten']);
+    // an error day in the future does not block "overcome" either
+    const offer = { skillId: 'schriftlich.addition', topicId: 'schriftlich' as const, stufe: 2 as const, bugTags: ['uebertrag'] };
+    const t = play([ev({ ...offer, day: future, firstTry: false, bugIds: ['uebertrag'] }), ev({ ...offer, day: future, firstTry: false, bugIds: ['uebertrag'] })]).s;
+    play(Array.from({ length: 4 }, () => ev({ ...offer, day: D1 })), t);
+    expect(t.recordAnswer(ev({ ...offer, day: D2 })).growth.map((g) => g.kind)).toEqual(['fehler']);
+  });
+
+  it('when the cap is reached, single slips go first and an almost overcome error stays', () => {
+    const tracks: Record<string, import('./types').ErrorTrack> = {
+      nearly: { day: '2026-10-01', seen: 2, run: 4 },
+      fresh: { day: '2026-10-20', seen: 2, run: 0 },
+      done: { day: '2026-09-01', seen: 2, run: 5, done: '2026-09-05' },
+    };
+    for (let i = 0; i < MAX_TAGS_PER_SKILL; i++) tracks[`slip${'abcdefghijklm'[i]}`] = { day: `2026-10-${10 + i}`, seen: 1, run: 0 };
+    const kept = Object.keys(capTracks(tracks, ['slipa']));
+    expect(kept).toHaveLength(MAX_TAGS_PER_SKILL);
+    for (const k of ['nearly', 'fresh', 'done', 'slipa']) expect(kept, k).toContain(k);
+    // of the other slips, the newest stay
+    expect(kept).toContain(`slip${'abcdefghijklm'[MAX_TAGS_PER_SKILL - 1]}`);
+    expect(kept).not.toContain('slipb');
+  });
+
+  it('tracking without a skill entry (e.g. from an edited file) never earns a badge', () => {
+    const s0 = emptyState();
+    const orphan: ProgressState = {
+      ...s0,
+      growth: {
+        stufen: { 'zahlen.runden#1': { earlyN: 10, earlyOk: 2, earlyWrong: 8, after: 10, improved: true, kept: 3 } },
+        errors: { 'zahlen.runden': { x: { day: D1, seen: 2, run: 5, done: D2 } } },
+        facts: {},
+      },
+    };
+    expect(growthFacts(orphan)).toEqual({ overcome: 0, improved: 0, kept: 0, keptTopics: 0 });
+  });
+
+  it('seedGrowth: Geübt Stufen keep their misses, Sicher ones get a closed window, carried when not the real start', () => {
+    const g = seedGrowth({
+      'zahlen.runden#1': { attempts: 14, recent: [false, false, false, true, true, true, false, true, true, false], practiceDays: 2, state: 'geuebt', box: 0, checks: [], last: '2026-10-15' },
+      'zahlen.runden#2': { attempts: 3, recent: [true, true, false], practiceDays: 1, state: 'geuebt', box: 0, checks: [], last: '2026-10-16' },
+      'geometrie.umfang#1': { attempts: 12, recent: [true, false, true, true, true, true, true, true, true, true], practiceDays: 2, state: 'sicher', box: 1, checks: [], last: '2026-10-12' },
+      'daten.zufall#1': { attempts: 0, recent: [], practiceDays: 0, state: 'neu', box: 0, checks: [] },
+    });
+    expect(g.stufen).toEqual({
+      'zahlen.runden#1': { earlyN: 10, earlyOk: 5, earlyWrong: 5, earlyDay: '2026-10-15', carried: true, after: 0, miss: '2026-10-15' },
+      'zahlen.runden#2': { earlyN: 3, earlyOk: 2, earlyWrong: 1, after: 0, miss: '2026-10-16' },
+      'geometrie.umfang#1': { earlyN: 10, earlyOk: 9, earlyWrong: 0, earlyDay: '2026-10-12', carried: true, after: 0 },
+    });
+    expect(g.errors).toEqual({});
+    expect(g.facts).toEqual({});
   });
 });

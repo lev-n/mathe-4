@@ -76,25 +76,31 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /**
- * Improvement tracking of one skill-Stufe (docs/research.md M16; src/state/growth.ts). The early window is
- * compared with StufeProgress.recent, so only what that comparison and the spaced-review check need is kept.
+ * Improvement tracking of one skill-Stufe (docs/research.md M16; src/state/growth.ts). Counts only: the early window
+ * is compared with StufeProgress.recent, so its sum is all that is needed.
  */
 export interface GrowthStufe {
-  /** First ≤ 10 first-try results since tracking started (same purposes as `recent`), frozen once full. */
-  early: boolean[];
+  /** Answers in the early window (the first answers since tracking began, same purposes as `recent`), 0 … 10. */
+  earlyN: number;
+  /** Of them first-try correct. */
+  earlyOk: number;
+  /** Of them with a wrong attempt (help alone is not one): a hard start needs real mistakes. */
+  earlyWrong: number;
   /** Day the early window became full. */
   earlyDay?: Day;
-  /** Answers in the early window with a wrong attempt (help alone is not one): a hard start needs real mistakes. */
-  earlyWrong?: number;
+  /** The early window was taken over from older saved progress (v2) and is not the real start ("Früher …"). */
+  carried?: true;
   /** Answers that fed `recent` after the early window was full, capped at 10 (10 = the two windows do not overlap). */
   after: number;
+  /** Most first-try correct among the last 10 once the windows did not overlap (never goes down). */
+  best?: number;
   /**
    * Last day of a wrong attempt here while the Stufe was still being learned (not yet 'sicher') or that cost a
    * Leitner box. Einmaleins facts use Growth.facts instead.
    */
   miss?: Day;
-  /** Day "besser geworden" was detected (at most once per skill-Stufe). */
-  improved?: Day;
+  /** "Besser geworden" was detected (at most once per skill-Stufe). */
+  improved?: true;
   /** Lasting improvements here: once-missed tasks solved first try in a spaced review days later. */
   kept?: number;
 }
@@ -126,9 +132,10 @@ export type GrowthEvent =
   | { kind: 'fehler'; skillId: string; stufe: Stufe; tag: string; run: number }
   /**
    * Skill improved after a hard start: `recent` is the last 10 first-try results when the windows do not overlap;
-   * `level` is set when this answer raised the mastery state.
+   * `level` is set when the Stufe is 'sicher'/'gemeistert'; `carried` when the early window came from older saved
+   * progress (not the real start: "Früher …").
    */
-  | { kind: 'besser'; skillId: string; stufe: Stufe; early: number; recent?: number; level?: 'sicher' | 'gemeistert' }
+  | { kind: 'besser'; skillId: string; stufe: Stufe; early: number; recent?: number; level?: 'sicher' | 'gemeistert'; carried?: true }
   /** Lasting improvement: a once-missed task type solved first try in a spaced review `days` after the miss. */
   | { kind: 'behalten'; skillId: string; stufe: Stufe; days: number; factKey?: string };
 

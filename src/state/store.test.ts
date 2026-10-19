@@ -50,7 +50,7 @@ describe('consent (§ 25 TDDDG)', () => {
     expect(stored(storage).growth).toEqual(s.get().growth);
     s.setConsent('denied');
     expect(storage.data.has(STORAGE_KEY)).toBe(false);
-    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ early: [false], earlyWrong: 1, after: 0, miss: '2026-10-19' });
+    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 1, earlyOk: 0, earlyWrong: 1, after: 0, miss: '2026-10-19' });
   });
 
   it("'granted' writes the current state immediately and after every change", () => {
@@ -153,7 +153,6 @@ describe('corrupt or unknown stored data is ignored safely', () => {
     '[]',
     '{"app":"mathe4","version":2}',
     '{"app":"mathe4","version":3}',
-    JSON.stringify({ ...JSON.parse(serializeState(emptyState())), version: 4 }),
     '{"app":"mathe4","version":1,"skills":{"zahlen.runden#1":{"attempts":-1}}}',
     JSON.stringify({ ...JSON.parse(serializeState(emptyState())), app: 'anderes' }),
   ];
@@ -167,6 +166,27 @@ describe('corrupt or unknown stored data is ignored safely', () => {
     // after opt-in, the valid state replaces it
     s.setConsent('granted');
     expect(stored(storage).totals.answered).toBe(1);
+  });
+
+  it('a document from a newer app version (a rollback of the site) is never overwritten, even after "Ja, merken"', () => {
+    const text = JSON.stringify({ ...JSON.parse(serializeState(emptyState())), version: 4, totals: { answered: 99 } });
+    const storage = memoryStorage({ [STORAGE_KEY]: text });
+    const s = createStore(storage);
+    expect(s.getConsent()).toBe('denied');
+    expect(s.get()).toEqual(emptyState());
+    s.recordAnswer(ev());
+    s.setConsent('granted');
+    s.recordAnswer(ev());
+    expect(storage.data.get(STORAGE_KEY)).toBe(text);
+    expect(storage.writes).toBe(0);
+    // honest: the UI must not claim that progress is saved
+    expect(s.getSaveStatus()).toBe('failed');
+    // "Fortschritt löschen" is an explicit choice to delete what is stored: then saving works again
+    s.reset();
+    expect(stored(storage)).toMatchObject({ version: 3, totals: { answered: 0 } });
+    s.recordAnswer(ev());
+    expect(stored(storage).totals.answered).toBe(1);
+    expect(s.getSaveStatus()).toBe('ok');
   });
 
   it('a document stored by v1 (with session ids) is migrated on load and saved without them', () => {

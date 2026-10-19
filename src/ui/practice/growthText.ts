@@ -5,47 +5,35 @@
  * no superlatives, no "falsch".
  */
 import { TIMES, fmt } from '../../core/format';
-import type { Stufe } from '../../core/types';
+import type { Stufe, SubtractionMethod } from '../../core/types';
 import { GROWTH_WINDOW, OVERCOME_RUN, type RoundNote, type SkillGrowthView } from '../../state/growth';
 import { factFactors } from '../../state/facts';
 import type { BadgeDef, MasteryState } from '../../state/types';
+import { familyPhrase, type FamilyPhrase } from '../../topics/errorFamilies';
 import { MASTERY_LABEL, stufeLabel } from '../app/labels';
 import { summaryText } from './phrases';
 
 export const IMPROVED_HEADING = 'Das hast du verbessert';
 export const GROWTH_VIEW_HEADING = 'So hast du dich verbessert';
 
-/** "Du hast <object> jetzt fünfmal <participle>." */
-export interface ErrorPhrase {
-  object: string;
-  participle: string;
-}
+/** "Du hast <object> jetzt fünfmal <participle>." (src/topics/errorFamilies.ts) */
+export type ErrorPhrase = FamilyPhrase;
 
-/** Misconception families of the error library (normalised Bug ids, src/state/growth.ts normalizeTag). */
-const ERROR_PHRASES: readonly { re: RegExp; phrase: ErrorPhrase }[] = [
-  { re: /^(add|mul)\.(no-carry|no-carry-cut|carry-|last-carry|sum-no-carry)|^zr\.carry/, phrase: { object: 'den Übertrag', participle: 'richtig beachtet' } },
-  { re: /^sub\.(no-reduce|smaller-from-larger|zero-minus-n|across-zero|borrow-added)/, phrase: { object: 'richtig entbündelt', participle: '' } },
-  { re: /^div\.missing(-end)?-zero/, phrase: { object: 'an die Null im Ergebnis', participle: 'gedacht' } },
-  { re: /^div\.rest/, phrase: { object: 'an den Rest', participle: 'gedacht' } },
-  { re: /^mul\.unshifted/, phrase: { object: 'die Teilergebnisse richtig', participle: 'eingerückt' } },
-  { re: /^faktor/, phrase: { object: 'die richtige Umrechnungszahl', participle: 'genommen' } },
-  { re: /^null-(fehlt|vorn|hinten)$/, phrase: { object: 'an die Null nach dem Komma', participle: 'gedacht' } },
-];
-
-const FALLBACK: ErrorPhrase = { object: 'einen Fehler, der dir vorher passiert war,', participle: 'vermieden' };
-
-export function errorPhrase(tag: string): ErrorPhrase {
-  return ERROR_PHRASES.find((p) => p.re.test(tag))?.phrase ?? FALLBACK;
+/**
+ * Phrase of a stored error-library tag (a misconception family id, src/topics/errorFamilies.ts). Written
+ * subtraction is worded for the child's method ('ergaenzen': Erweitern with the gemerkte 1).
+ */
+export function errorPhrase(tag: string, method: SubtractionMethod = 'abziehen'): ErrorPhrase {
+  return familyPhrase(tag, method);
 }
 
 const TIMES_WORD: Record<number, string> = { 5: 'fünfmal', 6: 'sechsmal', 7: 'siebenmal', 8: 'achtmal', 9: 'neunmal', 10: 'zehnmal' };
 
-/** 'Du hast den Übertrag jetzt fünfmal richtig beachtet.' */
-export function overcomeSentence(tag: string, run: number = OVERCOME_RUN, now = 'jetzt '): string {
-  const { object, participle } = errorPhrase(tag);
+/** 'Du hast den Übertrag jetzt fünfmal richtig beachtet.' (`now` = '' in the progress view: no "jetzt"). */
+export function overcomeSentence(tag: string, run: number = OVERCOME_RUN, now = 'jetzt ', method: SubtractionMethod = 'abziehen'): string {
+  const { object, participle } = errorPhrase(tag, method);
   const times = TIMES_WORD[run] ?? `${fmt(run)}-mal`;
-  // 'richtig entbündelt' has no object: "Du hast jetzt fünfmal richtig entbündelt."
-  return participle ? `Du hast ${object} ${now}${times} ${participle}.` : `Du hast ${now}${times} ${object}.`;
+  return `Du hast ${object} ${now}${times} ${participle}.`;
 }
 
 /** '3 · 7' for the fact key '3x7'. */
@@ -68,8 +56,8 @@ const levelWord = (state: MasteryState) => `„${MASTERY_LABEL[state]}“`;
 
 const of10 = (n: number) => `${fmt(n)} von ${fmt(GROWTH_WINDOW)}`;
 
-/** One line of "Das hast du verbessert". `title` gives the skill's title. */
-export function noteText(note: RoundNote, title: (skillId: string) => string): string {
+/** One line of "Das hast du verbessert". `title` gives the skill's title; `method` is the child's subtraction method. */
+export function noteText(note: RoundNote, title: (skillId: string) => string, method: SubtractionMethod = 'abziehen'): string {
   switch (note.kind) {
     case 'behalten': {
       const what = note.factKey ? factLabel(note.factKey) : `${title(note.skillId)}, ${stufeLabel(note.stufe)}`;
@@ -83,7 +71,7 @@ export function noteText(note: RoundNote, title: (skillId: string) => string): s
       return `${head}, jetzt ${levelWord(note.level ?? 'sicher')}.`;
     }
     case 'fehler':
-      return `${title(note.skillId)}: ${overcomeSentence(note.tag, note.run)}`;
+      return `${title(note.skillId)}: ${overcomeSentence(note.tag, note.run, 'jetzt ', method)}`;
     case 'zwilling':
       return note.count === 1
         ? 'Nach dem Lösungsweg hast du die ähnliche Aufgabe auf Anhieb gelöst.'
@@ -100,12 +88,15 @@ export function isBigNote(note: RoundNote): boolean {
   return note.kind !== 'zwilling' && note.kind !== 'selbst';
 }
 
-/** Lines of the progress view for one skill ("Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10."). */
-export function growthViewLines(view: SkillGrowthView): string[] {
+/**
+ * Lines of the progress view for one skill ("Stufe 2: Am Anfang 4 von 10 auf Anhieb, jetzt 9 von 10."), each once.
+ * `method` is the child's subtraction method (the wording of the written-subtraction family).
+ */
+export function growthViewLines(view: SkillGrowthView, method: SubtractionMethod = 'abziehen'): string[] {
   const lines: string[] = [];
   for (const s of view.stufen) {
     const head = `${stufeLabel(s.stufe as Stufe)}: `;
-    if (s.window) lines.push(`${head}Am Anfang ${of10(s.window.early)} auf Anhieb, jetzt ${of10(s.window.recent)}.`);
+    if (s.window) lines.push(`${head}Am Anfang ${of10(s.window.early)} auf Anhieb, später ${of10(s.window.best)}.`);
     else if (s.level && s.early !== undefined) lines.push(`${head}Am Anfang ${of10(s.early)} auf Anhieb, jetzt ${levelWord(s.level)}.`);
     if (s.kept > 0) {
       lines.push(
@@ -115,7 +106,11 @@ export function growthViewLines(view: SkillGrowthView): string[] {
       );
     }
   }
-  for (const tag of view.overcome) lines.push(overcomeSentence(tag, OVERCOME_RUN, ''));
+  for (const tag of view.overcome) {
+    const line = overcomeSentence(tag, OVERCOME_RUN, '', method);
+    // two tags without a family share the fallback sentence: say it once
+    if (!lines.includes(line)) lines.push(line);
+  }
   return lines;
 }
 

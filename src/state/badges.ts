@@ -80,8 +80,8 @@ export const BADGE_THRESHOLDS = {
   themenProfiSkills: 3,
   stufe3Topics: 3,
   gedaechtnis: 5,
-  /** Distinct skills with a lasting improvement for 'Lange behalten'. */
-  langeBehaltenSkills: 3,
+  /** Topics with a lasting improvement for 'Vieles behalten' (the largest improvement badge). */
+  vielesBehaltenTopics: 3,
 } as const;
 
 function factsAtLeast(state: ProgressState, keys: readonly string[], box: number): boolean {
@@ -155,16 +155,16 @@ const RULES: BadgeRule[] = [
   // ── Improvement badges (docs/research.md M16), from the 3rd kind of improvement upwards ──
   {
     id: 'fehler-ueberwunden',
-    title: 'Fehler überwunden',
-    description: 'Du hast einen Fehler, der dir passiert war, danach fünfmal vermieden. Das hat auch an einem anderen Tag geklappt.',
-    icon: '🔧',
+    title: 'Stolperstein überwunden',
+    description: 'Du bist bei einer Aufgabenart öfter an derselben Stelle gestolpert. Danach hast du fünf solche Aufgaben auf Anhieb gelöst, auch an einem anderen Tag.',
+    icon: '🌉',
     improvement: true,
     met: (_s, f) => f.growth.overcome >= 1,
   },
   {
     id: 'besser-geworden',
     title: 'Besser geworden',
-    description: 'Du hast eine Aufgabenart geübt, die am Anfang knifflig war. An einem späteren Tag hast du viel mehr davon auf Anhieb gelöst.',
+    description: 'Du hast eine Aufgabenart geübt, die am Anfang noch knifflig war. An einem späteren Tag hast du davon mehr auf Anhieb gelöst als am Anfang.',
     icon: '📈',
     improvement: true,
     met: (_s, f) => f.growth.improved >= 1,
@@ -172,18 +172,18 @@ const RULES: BadgeRule[] = [
   {
     id: 'behalten',
     title: 'Gut behalten',
-    description: 'Du hast etwas, das vorher knifflig war, Tage später in der Wiederholung auf Anhieb gelöst.',
+    description: 'Du hast Tage später in der Wiederholung auf Anhieb gelöst, was vorher noch knifflig war.',
     icon: '🌱',
     improvement: true,
     met: (_s, f) => f.growth.kept >= 1,
   },
   {
-    id: 'lange-behalten',
-    title: 'Lange behalten',
-    description: 'Du hast bei drei verschiedenen Aufgabenarten Tage später noch gewusst, was vorher knifflig war.',
+    id: 'vieles-behalten',
+    title: 'Vieles behalten',
+    description: 'Du hast in drei Themen Tage später auf Anhieb gelöst, was vorher noch knifflig war.',
     icon: '🌳',
     improvement: true,
-    met: (_s, f) => f.growth.keptSkills >= BADGE_THRESHOLDS.langeBehaltenSkills,
+    met: (_s, f) => f.growth.keptTopics >= BADGE_THRESHOLDS.vielesBehaltenTopics,
   },
 ];
 
