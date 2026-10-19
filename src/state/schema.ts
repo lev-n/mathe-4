@@ -9,7 +9,7 @@
  */
 import { isDay } from './dates';
 import { isFactKey } from './facts';
-import { ERROR_MIN_SEEN, GROWTH_WINDOW, LATER_OK_MIN, OVERCOME_RUN, capTracks, emptyGrowth, normalizeTag, seedGrowth } from './growth';
+import { ERROR_MIN_SEEN, GROWTH_WINDOW, IMPROVE_MAX_BLOCKS, IMPROVE_RUN, OVERCOME_RUN, capTracks, emptyGrowth, normalizeTag, seedGrowth } from './growth';
 import { CHECKS_SIZE, MAX_BOX, RECENT_SIZE, TOPIC_IDS, parseSkillKey } from './mastery';
 import type { StoredStufeProgress } from './mastery';
 import { DEFAULT_SETTINGS } from './types';
@@ -228,8 +228,14 @@ function parseGrowthStufe(v: unknown): GrowthStufe | null {
   if (v.carried === true) g.carried = true;
   const best = clampCount(v.best, GROWTH_WINDOW);
   if (best !== null) g.best = best;
-  const laterOk = clampCount(v.laterOk, LATER_OK_MIN);
-  if (laterOk) g.laterOk = laterOk;
+  // kind 4's later blocks (an older `laterOk` is ignored); `run` and `runDay` only together
+  const later = clampCount(v.later, IMPROVE_MAX_BLOCKS * GROWTH_WINDOW);
+  if (later) g.later = later;
+  const run = clampCount(v.run, IMPROVE_RUN);
+  if (run && isDay(v.runDay)) {
+    g.run = run;
+    g.runDay = v.runDay;
+  }
   if (isDay(v.miss)) {
     g.miss = v.miss;
     if (v.missCarried === true) g.missCarried = true;

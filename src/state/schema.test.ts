@@ -227,9 +227,11 @@ describe('v2 → v3: improvement tracking is added and seeded conservatively', (
     // a 'sicher' entry from v2 gives no reward for its old misses
     const old = s.recordAnswer(ev({ skillId: 'schriftlich.addition', topicId: 'schriftlich', stufe: 2, purpose: 'review', day: '2026-10-20' }));
     expect(old.growth).toEqual([]);
-    // the seeded early window (5 of 10, 5 misses) of a 'geuebt' entry: 'Sicher' on a later day is "besser"
-    const seen = Array.from({ length: 4 }, () => s.recordAnswer(ev({ day: '2026-10-19' })).growth).flat();
-    expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, level: 'sicher', carried: true }]);
+    // the seeded early window (5 of 10, 5 misses) of a 'geuebt' entry is a hard start: three blocks of at least 9 of 10
+    // on later days (two of them) are "besser"
+    const day = (d: string) => Array.from({ length: 10 }, () => s.recordAnswer(ev({ day: d })).growth).flat();
+    const seen = [...day('2026-10-18'), ...day('2026-10-18'), ...day('2026-10-19')];
+    expect(seen).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, recent: 10, carried: true }]);
     // and its seeded miss (on the last v2 day) is kept in a review days later
     const review = s.recordAnswer(ev({ day: '2026-10-20', purpose: 'review' }));
     // the seeded miss day is only an upper bound: the event says so ("Früher …")
@@ -300,6 +302,22 @@ describe('validation of the improvement tracking: derived data never makes store
     ['earlyDay while the window is not full (field dropped)', (d) => (stufe(d).earlyDay = '2026-10-19'), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('earlyDay')],
     ['kept fractional (field dropped)', (d) => (stufe(d).kept = 1.5), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('kept')],
     ['improved not true (field dropped)', (d) => (stufe(d).improved = '2026-10-19'), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('improved')],
+    ['later above the 8 blocks (clamped)', (d) => (stufe(d).later = 95), (gr) => expect(gr.stufen['zahlen.runden#1'].later).toBe(80)],
+    [
+      'run above 3 (clamped)',
+      (d) => Object.assign(stufe(d), { run: 7, runDay: '2026-10-19' }),
+      (gr) => expect(gr.stufen['zahlen.runden#1']).toMatchObject({ run: 3, runDay: '2026-10-19' }),
+    ],
+    [
+      'run without its day, or a day without a run (dropped together)',
+      (d) => Object.assign(stufe(d), { run: 2, runDay: 'gestern' }),
+      (gr) => {
+        expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('run');
+        expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('runDay');
+      },
+    ],
+    ['a run day without a run (dropped)', (d) => Object.assign(stufe(d), { run: 0, runDay: '2026-10-19' }), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('runDay')],
+    ['laterOk of the earlier kind-4 rule (ignored)', (d) => (stufe(d).laterOk = 3), (gr) => expect(gr.stufen['zahlen.runden#1']).not.toHaveProperty('laterOk')],
     ['errors for an unknown topic', (d) => (g(d).errors['musik.noten'] = {}), (gr) => expect(gr.errors['musik.noten']).toBeUndefined()],
     ['errors of a skill without entries', (d) => (g(d).errors['geometrie.flaeche'] = { x: { day: '2026-10-19', seen: 2, run: 5, done: '2026-10-20' } }), (gr) => expect(gr.errors['geometrie.flaeche']).toBeUndefined()],
     ['errors not an object', (d) => (g(d).errors['zahlen.runden'] = [] as unknown as Record<string, Record<string, unknown>>), (gr) => expect(gr.errors['zahlen.runden']).toBeUndefined()],

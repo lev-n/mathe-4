@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from './dates';
 import {
   ERROR_MIN_SEEN,
+  IMPROVE_MAX_BLOCKS,
+  IMPROVE_RUN,
   capTracks,
   seedGrowth,
-  HARD_START_MAX,
+  improveBar,
   MAX_ROUND_NOTES,
   MAX_TAGS_PER_ANSWER,
   MAX_TAGS_PER_SKILL,
@@ -228,99 +230,104 @@ describe('kind 3: error overcome', () => {
 
 // ─── 4. Skill improved ──────────────────────────────────────────────────────
 
-describe('kind 4: skill improved (first 10 vs last 10, or a new level after a hard start)', () => {
-  it('a hard start, then clearly better on a later day → besser (window variant)', () => {
-    // D1: 4 of 10 first try, ending with misses; D2: 8 of 10 without ever reaching 'sicher'
-    const { s, outs } = play([...pattern('xxxx......', D1), ...pattern('xxxxx.xx.x', D2)]);
-    const events = growthOf(outs);
-    expect(events).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, recent: 8 }]);
-    expect(growthOf(outs.slice(0, -1))).toEqual([]); // only when the windows no longer overlap
-    expect(s.get().skills['zahlen.runden#1'].state).toBe('geuebt');
-    expect(s.get().growth.stufen['zahlen.runden#1']).toEqual({ earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: D1, after: 10, best: 8, laterOk: 3, miss: D2, improved: true });
+describe('kind 4: skill improved (a hard start, then three good blocks of 10 on later days)', () => {
+  /** Day `n` after D1. */
+  const day = (n: number) => addDays(D1, n);
+  /** One block of 10 practice answers on `d` with `ok` first-try correct (the misses first, so `recent` ends well). */
+  const block = (ok: number, d: string) => pattern('.'.repeat(10 - ok) + 'x'.repeat(ok), d);
+  /** A start of 10 on D1 with `ok` first-try correct; the rest are real wrong attempts. */
+  const start = (ok: number) => pattern('x'.repeat(ok) + '.'.repeat(10 - ok), D1);
+  const besserOf = (outs: AnswerOutcome[]) => growthOf(outs).filter((g) => g.kind === 'besser');
+  /** Index (1-based answer number) of the answer that produced "besser". */
+  const firedAt = (outs: AnswerOutcome[]) => outs.findIndex((o) => o.growth.some((g) => g.kind === 'besser')) + 1;
+
+  it('4 of 10 at the start, then 8, 8, 8 on three later days → besser on the 40th answer, with true numbers', () => {
+    const { s, outs } = play([...start(4), ...block(8, day(1)), ...block(8, day(2)), ...block(8, day(3))]);
+    expect(besserOf(outs)).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, recent: 8 }]);
+    expect(firedAt(outs)).toBe(40);
+    // "jetzt 8 von 10" is the last 10 answers
+    expect(s.get().skills['zahlen.runden#1'].recent.filter(Boolean)).toHaveLength(8);
+    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ earlyN: 10, earlyOk: 4, earlyWrong: 6, earlyDay: D1, later: 30, run: 3, runDay: day(1), improved: true });
     expect(badgeIds(outs)).toContain('besser-geworden');
   });
 
-  it('a gain to 7 of 10 is shown on the progress page but is not yet "besser" (that needs the Sicher level, 8)', () => {
-    const { s, outs } = play([...pattern('xxxx......', D1), ...pattern('xxx.xxx.x.', D2)]);
-    expect(growthOf(outs)).toEqual([]);
-    expect(growthView(s.get(), 'zahlen.runden')?.stufen[0].window).toEqual({ early: 4, best: 7 });
+  it('nothing before the third block is complete; a weaker block starts the run again', () => {
+    const early = play([...start(4), ...block(8, day(1)), ...block(8, day(2)), ...block(8, day(3)).slice(0, 9)]);
+    expect(besserOf(early.outs)).toEqual([]);
+    const { outs } = play([...start(4), ...block(8, day(1)), ...block(7, day(2)), ...block(8, day(3)), ...block(8, day(4)), ...block(8, day(5))]);
+    expect(firedAt(outs)).toBe(60);
   });
 
-  it('a hard start, then Sicher on a later day → besser (level variant)', () => {
-    const outs = play([...pattern('......xxxx', D1), ...pattern('xxxx', D2)]).outs;
-    expect(growthOf(outs)).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, level: 'sicher' }]);
-  });
-
-  it("'Sicher' on the day of the hard start counts once later days confirm it with first-try answers (reviews too)", () => {
-    const { s, outs } = play([...pattern('....xxxxxx', D1), ...pattern('xxxx', D1)]);
-    expect(s.get().skills['zahlen.runden#1'].state).toBe('sicher');
-    expect(growthOf(outs)).toEqual([]);
-    expect(s.recordAnswer(ev({ day: D2, purpose: 'review' })).growth).toEqual([]);
-    expect(s.recordAnswer(ev({ day: D2 })).growth).toEqual([]);
-    const out = s.recordAnswer(ev({ day: D5, purpose: 'review' }));
-    // the same review also shows a lasting improvement: the misses of D1 were real
-    expect(out.growth).toEqual([
-      { kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 6, level: 'sicher' },
-      { kind: 'behalten', skillId: 'zahlen.runden', stufe: 1, days: 4 },
+  it('the bar grows with the start: max(8, start + 4), so the shown gain is always at least 4', () => {
+    expect(besserOf(play([...start(5), ...block(8, day(1)), ...block(8, day(2)), ...block(8, day(3))]).outs)).toEqual([]);
+    expect(besserOf(play([...start(5), ...block(9, day(1)), ...block(9, day(2)), ...block(9, day(3))]).outs)).toEqual([
+      { kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 5, recent: 9 },
+    ]);
+    expect(besserOf(play([...start(6), ...[1, 2, 3, 4].flatMap((d) => block(9, day(d)))]).outs)).toEqual([]);
+    expect(besserOf(play([...start(6), ...[1, 2, 3].flatMap((d) => block(10, day(d)))]).outs)).toEqual([
+      { kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 6, recent: 10 },
     ]);
   });
 
-  it('anti-farming: misses on purpose and a same-day recovery are never confirmed by a wrong or help-only answer later', () => {
-    for (const later of [
-      ev({ day: D2, firstTry: false, solved: true }), // wrong in practice
-      ev({ day: D2, purpose: 'review', firstTry: false }), // wrong in a review
-      ev({ day: D2, firstTry: false, solved: true, usedHint: true, wrongAttempt: false }), // help only
-    ]) {
-      const { s, outs } = play([...pattern('..........', D1), ...pattern('xxxxxxxxx.', D1)]);
-      outs.push(s.recordAnswer(later), s.recordAnswer(later), s.recordAnswer(later));
-      expect(growthOf(outs), JSON.stringify(later)).toEqual([]);
-      expect(badgeIds(outs)).not.toContain('besser-geworden');
-    }
+  it('a start that was not hard never counts (7 of 10, or misses that were only "Tipp")', () => {
+    const tens = [1, 2, 3, 4].flatMap((d) => block(10, day(d)));
+    expect(besserOf(play([...start(7), ...tens]).outs)).toEqual([]);
+    const tipps = Array.from({ length: 10 }, () => ev({ day: D1, firstTry: false, solved: true, usedHint: true, wrongAttempt: false }));
+    const { s, outs } = play([...tipps, ...tens]);
+    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ earlyN: 10, earlyOk: 0, earlyWrong: 0 });
+    expect(s.get().growth.stufen['zahlen.runden#1'].later).toBeUndefined();
+    expect(besserOf(outs)).toEqual([]);
+    // exactly 3 real mistakes (and 7 'Tipp') is a hard start; a start of 0 or 1 is said in words
+    const mixed = [...pattern('...', D1), ...tipps.slice(0, 7)];
+    const fired = besserOf(play([...mixed, ...[1, 2, 3].flatMap((d) => block(10, day(d)))]).outs);
+    expect(fired).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 0, recent: 10 }]);
   });
 
-  it('a decline is never shown as an improvement: with Sicher but fewer than at the start, only the level is named', () => {
-    // D1: 6 of 10 with 4 misses, then Sicher, then 2 misses; D2: 4 misses, then first-try answers on later days
-    const { s, outs } = play([...pattern('....xxxxxx', D1), ...pattern('xxxxxxxx..', D1), ...pattern('....', D2)]);
-    outs.push(...play([ev({ day: D2 }), ev({ day: D5, purpose: 'review' }), ev({ day: D5, purpose: 'review' })], s).outs);
-    const besser = growthOf(outs).filter((g) => g.kind === 'besser');
-    expect(besser).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 6, level: 'sicher' }]);
+  it('anti-farming: misses on purpose, then right answers on the same day or on one later day only, earn nothing', () => {
+    expect(besserOf(play([...start(0), ...pattern('x'.repeat(40), D1)]).outs)).toEqual([]);
+    // three good blocks, but all on one later day: the run must span two days
+    const { s, outs } = play([...start(0), ...pattern('x'.repeat(30), day(1))]);
+    expect(besserOf(outs)).toEqual([]);
+    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ later: 30, run: 3, runDay: day(1) });
+    expect(besserOf(play(block(10, day(2)), s).outs)).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 0, recent: 10 }]);
   });
 
-  it('anti-farming: pressing Tipp before every task is no hard start (help is not a mistake)', () => {
-    const tipps = Array.from({ length: 10 }, () => ev({ day: D1, firstTry: false, solved: true, usedHint: true }));
-    const { s, outs } = play([...tipps, ...pattern('xxxxxxxxxx', D2)]);
-    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ earlyN: 10, earlyOk: 0, earlyWrong: 0, after: 10 });
-    expect(growthOf(outs)).toEqual([]);
-    expect(badgeIds(outs)).not.toContain('besser-geworden');
+  it('answers on the day of the start do not count; blocks may span days', () => {
+    // 15 answers on D1 (5 good ones after the start), then 8, 8, 8
+    const { outs } = play([...start(4), ...pattern('xxxxx', D1), ...block(8, day(1)), ...block(8, day(2)), ...block(8, day(3))]);
+    expect(firedAt(outs)).toBe(45);
+    // 10 wrong on D1, then 10 on day 1 and 20 on day 2: the run spans day 1 and day 2
+    expect(firedAt(play([...start(0), ...block(10, day(1)), ...pattern('x'.repeat(20), day(2))]).outs)).toBe(40);
   });
 
-  it('anti-farming: misses on purpose and then right answers on the same day earn nothing', () => {
-    const { s, outs } = play([...pattern('..........', D1), ...pattern('xxxxxxxxxx', D1)]);
-    expect(growthOf(outs)).toEqual([]);
-    expect(badgeIds(outs)).not.toContain('besser-geworden');
-    expect(s.get().growth.stufen['zahlen.runden#1'].improved).toBeUndefined();
+  it('only the first 8 blocks after the start can complete the run (more practice adds no chances)', () => {
+    const bad = (n: number) => Array.from({ length: n }, (_, i) => block(5, day(i + 1))).flat();
+    // 5 weaker blocks, then 8, 8, 8 as blocks 6–8: the last chance
+    expect(firedAt(play([...start(4), ...bad(5), ...[6, 7, 8].flatMap((d) => block(8, day(d)))]).outs)).toBe(90);
+    // 6 weaker blocks: the run could only finish in block 9 → never
+    const { s, outs } = play([...start(4), ...bad(6), ...[7, 8, 9, 10].flatMap((d) => block(10, day(d)))]);
+    expect(besserOf(outs)).toEqual([]);
+    expect(s.get().growth.stufen['zahlen.runden#1'].later).toBe(IMPROVE_MAX_BLOCKS * 10);
   });
 
-  it('a clear rise without a low start counts too (7 → 10 of 10 after 3 real mistakes)', () => {
-    const start = 'x'.repeat(HARD_START_MAX + 1) + '...';
-    const outs = play([...pattern(start, D1), ...pattern('xxxxxxxxxx', D2)]).outs;
-    expect(growthOf(outs)).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 7, recent: 10 }]);
+  it('mixed and twin answers count like practice; reviews neither count nor break a block', () => {
+    const missedReviews = (d: string) => [ev({ day: d, purpose: 'review', firstTry: false }), ev({ day: d, purpose: 'review', firstTry: false })];
+    const { outs } = play([...start(4), ...[1, 2, 3].flatMap((d) => [...missedReviews(day(d)), ...block(8, day(d))])]);
+    expect(firedAt(outs)).toBe(46);
+    const mixed = [1, 2, 3].flatMap((d) => [...block(8, day(d)).slice(0, 9), ev({ day: day(d), purpose: d === 2 ? 'twin' : 'mixed' })]);
+    expect(besserOf(play([...start(4), ...mixed]).outs)).toHaveLength(1);
   });
 
-  it('a good start → never (correct answers stay rewarded by stars only); help alone is no start to improve on', () => {
-    expect(growthOf(play([...pattern('xxxxxxxxx.', D1), ...pattern('xxxxxxxxxx', D2), ...pattern('xxxxxxxxxx', D5)]).outs)).toEqual([]);
-    const tipps = Array.from({ length: 3 }, () => ev({ day: D1, firstTry: false, solved: true, usedHint: true, wrongAttempt: false }));
-    expect(growthOf(play([...tipps, ...pattern('xxxxxxx', D1), ...pattern('xxxxxxxxxx', D2)]).outs)).toEqual([]);
-  });
-
-  it('a gain of 3 that ends below 8 of 10 is not "besser" yet', () => {
-    const outs = play([...pattern('xxx.......', D1), ...pattern('xxx..x.x.x', D2)]).outs; // 3 → 6
-    expect(growthOf(outs)).toEqual([]);
+  it("'Sicher' alone is no longer enough; the progress view still shows the level after a hard start", () => {
+    const { s, outs } = play([...start(4), ...pattern('xxxxxxxxxx', day(1))]);
+    expect(s.get().skills['zahlen.runden#1'].state).toBe('sicher');
+    expect(besserOf(outs)).toEqual([]);
+    expect(growthView(s.get(), 'zahlen.runden')?.stufen[0]).toMatchObject({ level: 'sicher', early: 4 });
   });
 
   it('is detected once per skill-Stufe', () => {
-    const outs = play([...pattern('xxxx......', D1), ...pattern('xxx.xxx.x.', D2), ...pattern('xxxxxxxxxx', D5)]).outs;
-    expect(growthOf(outs).filter((g) => g.kind === 'besser')).toHaveLength(1);
+    const outs = play([...start(4), ...[1, 2, 3, 4, 5, 6].flatMap((d) => block(8, day(d)))]).outs;
+    expect(besserOf(outs)).toHaveLength(1);
   });
 
   it('review and Blitz answers do not feed the windows', () => {
@@ -328,12 +335,25 @@ describe('kind 4: skill improved (first 10 vs last 10, or a new level after a ha
     play(pattern('xxxx......', D1), s);
     for (let i = 0; i < 12; i++) s.recordAnswer(ev({ day: D2, purpose: 'review' }));
     s.recordAnswer(ev({ day: D2, purpose: 'blitz' }));
-    expect(s.get().growth.stufen['zahlen.runden#1'].after).toBe(0);
+    expect(s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ after: 0 });
+    expect(s.get().growth.stufen['zahlen.runden#1'].later).toBeUndefined();
   });
 
   it('a clock that went back (an earlier day) is not a later day', () => {
-    const outs = play([...pattern('xxxx......', D2), ...pattern('xxx.xxx.x.', D1)]).outs;
-    expect(growthOf(outs)).toEqual([]);
+    const outs = play([...pattern('xxxx......', D2), ...[1, 2, 3].flatMap(() => block(10, D1))]).outs;
+    expect(besserOf(outs)).toEqual([]);
+  });
+
+  it('a run day stored in the future is clamped, so the run still needs a later day to finish', () => {
+    const base = play([...start(4), ...block(8, day(1)), ...block(8, day(2))]).s.get();
+    const key = 'zahlen.runden#1';
+    let state: ProgressState = { ...base, growth: { ...base.growth, stufen: { ...base.growth.stufen, [key]: { ...base.growth.stufen[key], runDay: '2027-03-01' } } } };
+    let events: GrowthEvent[] = [];
+    for (const e of block(8, day(3))) ({ state, events } = answer(state, e));
+    expect(events).toEqual([]);
+    expect(state.growth.stufen[key].runDay).toBe(day(3));
+    for (const e of block(8, day(4))) ({ state, events } = answer(state, e));
+    expect(events).toEqual([{ kind: 'besser', skillId: 'zahlen.runden', stufe: 1, early: 4, recent: 8 }]);
   });
 });
 
@@ -597,6 +617,9 @@ describe('random play keeps the tracking valid, bounded and loadable', () => {
           expect(g.earlyWrong).toBeLessThanOrEqual(g.earlyN);
           expect(g.best ?? 0).toBeLessThanOrEqual(10);
           if (g.earlyDay) expect(g.earlyN).toBe(10);
+          expect(g.later ?? 0).toBeLessThanOrEqual(IMPROVE_MAX_BLOCKS * 10);
+          expect(g.run ?? 0).toBeLessThanOrEqual(IMPROVE_RUN);
+          expect(g.run === undefined).toBe(g.runDay === undefined);
         }
         for (const tracks of Object.values(st.growth.errors)) {
           expect(Object.keys(tracks).length).toBeLessThanOrEqual(MAX_TAGS_PER_SKILL);
@@ -610,6 +633,11 @@ describe('random play keeps the tracking valid, bounded and loadable', () => {
         for (const e of out.growth) {
           // NRW extras never produce a badge; growth events never come from Blitz answers
           if (e.skillId === 'zahlen.binaer') expect(out.newBadges.filter((b) => b.improvement)).toEqual([]);
+          // "jetzt 9 von 10" is the last 10 answers, at least the bar above the start
+          if (e.kind === 'besser') {
+            expect(e.recent).toBeGreaterThanOrEqual(improveBar(e.early));
+            expect(st.skills[`${e.skillId}#${e.stufe}`].recent.slice(-10).filter(Boolean)).toHaveLength(e.recent);
+          }
         }
         if (i % 50 === 49) {
           const r = parseText(serializeState(st));

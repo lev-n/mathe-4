@@ -10,12 +10,13 @@
  *                 happen again: the next OVERCOME_RUN tasks of that skill that offer the same error were solved first
  *                 try, the last of them on a later day than the error. Once per skill and error. (Einmaleins facts
  *                 are left to kind 5, which tracks every fact on its own.)
- *   4. besser   – real mistakes at the start (≥ HARD_START_MIN_WRONG wrong attempts in the first 10) and later-day
- *                 evidence (≥ LATER_OK_MIN first-try answers on days after that early window, the last one now), then
- *                 either the last 10 (not overlapping the first 10) are ≥ IMPROVE_MIN_GAIN better and
- *                 ≥ IMPROVE_MIN_RECENT, or, after a hard start (also ≤ HARD_START_MAX first-try correct), the Stufe
- *                 is 'sicher'/'gemeistert'. Once per skill-Stufe. (A low early window partly regresses to the mean by
- *                 chance; the numbers shown are still true. A pilot heuristic, docs/research.md §7.2.)
+ *   4. besser   – a hard start (≤ HARD_START_MAX of the first 10 first try, ≥ HARD_START_MIN_WRONG of them with a
+ *                 real wrong attempt), then IMPROVE_RUN blocks of 10 in a row on later days, each with at least
+ *                 improveBar(start) first try, the last of them on a later day than the first. Blocks are disjoint and
+ *                 judged only when complete, and only the first IMPROVE_MAX_BLOCKS can complete the run, so practising
+ *                 longer adds no chances: a low start partly rises again by chance (regression to the mean). In a
+ *                 simulation of children who do not improve, it fired for at most about 4 % of them (the sliding
+ *                 window used before: up to 80 %; docs/research.md §7.2). Once per skill-Stufe.
  *   5. behalten – a task type the child once got wrong (the skill-Stufe, or the Einmaleins fact) solved first try in
  *                 a spaced review (the scheduler picks those items) ≥ LASTING_MIN_DAYS after the last miss.
  *
@@ -43,12 +44,14 @@ export const GROWTH_WINDOW = RECENT_SIZE;
 export const HARD_START_MAX = 6;
 /** … if at least this many of them had a wrong attempt (help alone does not make a start hard). */
 export const HARD_START_MIN_WRONG = 3;
-/** "Besser geworden": the last 10 are at least this much better than the first 10 … */
-export const IMPROVE_MIN_GAIN = 3;
-/** … and at least this many of the last 10 are first-try correct (the 'Sicher' level). */
+/** "Besser geworden": each block of 10 later-day answers has at least this many more first try than the start … */
+export const IMPROVE_MIN_GAIN = 4;
+/** … and at least this many (the 'Sicher' level) … */
 export const IMPROVE_MIN_RECENT = 8;
-/** First-try answers on later days than the early window before "besser" counts (later-session evidence). */
-export const LATER_OK_MIN = 3;
+/** … in this many blocks in a row … */
+export const IMPROVE_RUN = 3;
+/** … among the first this many blocks after the start (a lucky streak gets a fixed number of chances). */
+export const IMPROVE_MAX_BLOCKS = 8;
 /** The progress view shows a gain from this size on (gentler than the badge, never a decline). */
 export const VIEW_MIN_GAIN = 2;
 /** Tasks in which an error must have happened before it can be overcome (one slip is not an error pattern). */
@@ -140,6 +143,11 @@ export function seedGrowth(skills: Readonly<Record<string, StufeProgress>>): Gro
 }
 
 const countTrue = (xs: readonly boolean[]) => xs.filter(Boolean).length;
+
+/** First-try correct answers a block of 10 needs for "besser" after a start with `earlyOk` (4 → 8, 5 → 9, 6 → 10). */
+export function improveBar(earlyOk: number): number {
+  return Math.max(IMPROVE_MIN_RECENT, earlyOk + IMPROVE_MIN_GAIN);
+}
 /** Own entries only (tags such as 'constructor' must not find inherited properties). */
 const own = <T>(record: Record<string, T>, key: string): T | undefined => (Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined);
 
@@ -202,13 +210,13 @@ function updateStufe(
   before: MasteryState,
   prevBox: number,
   prevFactBox: number,
-  after: MasteryState,
   recent: readonly boolean[],
   facts: Record<string, Day>,
   events: GrowthEvent[],
 ): GrowthStufe {
   const g: GrowthStufe = prev ? { ...prev } : emptyGrowthStufe();
   if (g.earlyDay !== undefined) g.earlyDay = notAfter(g.earlyDay, day);
+  if (g.runDay !== undefined) g.runDay = notAfter(g.runDay, day);
   if (g.miss !== undefined) g.miss = notAfter(g.miss, day);
   const wrong = hadWrongAttempt(event);
   if (feedsRecent(event.purpose)) {
@@ -225,22 +233,28 @@ function updateStufe(
   const last = disjoint ? countTrue(recent.slice(-GROWTH_WINDOW)) : undefined;
   if (last !== undefined && last > (g.best ?? -1)) g.best = last;
   const laterDay = g.earlyDay !== undefined && day > g.earlyDay;
-  if (laterDay && event.firstTry) g.laterOk = Math.min(LATER_OK_MIN, (g.laterOk ?? 0) + 1);
 
-  // Kind 4: real mistakes at the start, then clearly better, shown by first-try answers on later days (the one now
-  // included): the last 10 clearly better than the first 10, or – after a hard start – the Stufe 'sicher'.
-  if (!g.improved && event.firstTry && laterDay && g.earlyN === GROWTH_WINDOW && g.earlyWrong >= HARD_START_MIN_WRONG && (g.laterOk ?? 0) >= LATER_OK_MIN) {
-    const early = g.earlyOk;
-    const gain = last !== undefined && last >= early + IMPROVE_MIN_GAIN && last >= IMPROVE_MIN_RECENT;
-    const rose = isHardStart(g) && isAtLeastSicher(after);
-    if (gain || rose) {
-      g.improved = true;
-      const e: GrowthEvent = { kind: 'besser', skillId: event.skillId, stufe: event.stufe, early };
-      // The count only when it shows the gain (never "4 von 10" after "6 von 10"); otherwise the level.
-      if (gain) e.recent = last;
-      else e.level = after as 'sicher' | 'gemeistert';
-      if (g.carried) e.carried = true;
-      events.push(e);
+  // Kind 4: after a hard start, IMPROVE_RUN good blocks of 10 in a row on later days. The answers on later days are cut
+  // into disjoint blocks, each judged once when complete, within the first IMPROVE_MAX_BLOCKS: no answer-by-answer
+  // re-testing of a sliding window. The block just completed is the last 10 of `recent`, so "jetzt 9 von 10" is true.
+  if (feedsRecent(event.purpose) && laterDay && !g.improved && isHardStart(g) && (g.later ?? 0) < IMPROVE_MAX_BLOCKS * GROWTH_WINDOW) {
+    g.later = (g.later ?? 0) + 1;
+    if (g.later % GROWTH_WINDOW === 0) {
+      const block = countTrue(recent.slice(-GROWTH_WINDOW));
+      if (block >= improveBar(g.earlyOk)) {
+        if (g.run === undefined || g.runDay === undefined) g.runDay = day;
+        g.run = Math.min(IMPROVE_RUN, (g.run ?? 0) + 1);
+      } else {
+        delete g.run;
+        delete g.runDay;
+      }
+      // The run must span two days, so one long day of practice is not enough.
+      if ((g.run ?? 0) >= IMPROVE_RUN && g.runDay !== undefined && day > g.runDay) {
+        g.improved = true;
+        const e: GrowthEvent = { kind: 'besser', skillId: event.skillId, stufe: event.stufe, early: g.earlyOk, recent: block };
+        if (g.carried) e.carried = true;
+        events.push(e);
+      }
     }
   }
 
@@ -308,7 +322,7 @@ export function applyGrowth(prev: ProgressState, next: ProgressState, event: Ans
   const was = prev.skills[key];
   const factKey = normalizeFactKey(event.factKey);
   const prevFactBox = factKey ? (prev.facts[factKey]?.box ?? 0) : 0;
-  const stufe = updateStufe(own(growth.stufen, key), event, day, was?.state ?? 'neu', was?.box ?? 0, prevFactBox, entry.state, entry.recent, facts, events);
+  const stufe = updateStufe(own(growth.stufen, key), event, day, was?.state ?? 'neu', was?.box ?? 0, prevFactBox, entry.recent, facts, events);
   const oldTracks = own(growth.errors, event.skillId) ?? {};
   const tracks = updateErrors(oldTracks, event, day, events);
   const errors = tracks === oldTracks ? growth.errors : { ...growth.errors, [event.skillId]: tracks };

@@ -100,13 +100,7 @@ export function noteParts(note: RoundNote, title: (skillId: string) => string, m
     case 'fakten':
       return { text: `${fmt(note.count)} Einmaleins-Aufgaben waren ${lower(agoPhrase(note.days))} noch knifflig. Heute hast du sie in der Wiederholung auf Anhieb gewusst.` };
     case 'besser':
-      return {
-        head: skillHead(note),
-        text:
-          note.recent !== undefined
-            ? fromTo(note.early, note.carried, `jetzt ${of10(note.recent)}`, true)
-            : fromTo(note.early, note.carried, levelPhrase(note.level ?? 'sicher'), false),
-      };
+      return { head: skillHead(note), text: fromTo(note.early, note.carried, `jetzt ${of10(note.recent)}`, true) };
     case 'fehler':
       return { head: title(note.skillId), text: overcomeSentence(note.tag, note.run, 'jetzt ', method) };
     case 'zwilling':

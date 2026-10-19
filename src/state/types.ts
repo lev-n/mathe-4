@@ -94,8 +94,15 @@ export interface GrowthStufe {
   after: number;
   /** Most first-try correct among the last 10 once the windows did not overlap (never goes down). */
   best?: number;
-  /** First-try correct answers on days after the early window, capped at 3: "besser" needs later-day evidence. */
-  laterOk?: number;
+  /**
+   * After a hard start: answers that fed `recent` on days after the early window, until "besser" or the end of the
+   * blocks that can count (0 … 80). Every 10th closes a block of 10 (src/state/growth.ts kind 4).
+   */
+  later?: number;
+  /** Blocks of 10 in a row that met the bar (1 … 3, absent = none). */
+  run?: number;
+  /** Day the first block of the current run closed (set together with `run`). */
+  runDay?: Day;
   /**
    * Last day of a wrong attempt here while the Stufe was still being learned (not yet 'sicher') or that cost a
    * Leitner box. Einmaleins facts use Growth.facts instead.
@@ -135,11 +142,10 @@ export type GrowthEvent =
   /** Error overcome: a typical error did not happen again in 5 later tasks of the skill. */
   | { kind: 'fehler'; skillId: string; stufe: Stufe; tag: string; run: number }
   /**
-   * Skill improved after a hard start: `recent` is the last 10 first-try results when the windows do not overlap;
-   * `level` is set when the Stufe is 'sicher'/'gemeistert'; `carried` when the early window came from older saved
-   * progress (not the real start: "Früher …").
+   * Skill improved after a hard start: `early` first-try correct of the first 10, `recent` of the last 10 (the block
+   * that completed the run); `carried` when the early window came from older saved progress ("Früher …").
    */
-  | { kind: 'besser'; skillId: string; stufe: Stufe; early: number; recent?: number; level?: 'sicher' | 'gemeistert'; carried?: true }
+  | { kind: 'besser'; skillId: string; stufe: Stufe; early: number; recent: number; carried?: true }
   /** Lasting improvement: a once-missed task type solved first try in a spaced review `days` after the miss. */
   | { kind: 'behalten'; skillId: string; stufe: Stufe; days: number; factKey?: string; carried?: true };
 

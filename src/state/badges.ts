@@ -156,7 +156,7 @@ const RULES: BadgeRule[] = [
   {
     id: 'besser-geworden',
     title: 'Besser geworden',
-    description: 'Du hast eine Aufgabenart geübt, die am Anfang noch knifflig war. An einem späteren Tag hast du davon mehr auf Anhieb gelöst als am Anfang.',
+    description: 'Du hast eine Aufgabenart geübt, die am Anfang noch knifflig war. An späteren Tagen hast du davon dreimal hintereinander mindestens 8 von 10 auf Anhieb gelöst.',
     icon: '📈',
     improvement: true,
     met: (_s, f) => f.growth.improved >= 1,
