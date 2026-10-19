@@ -15,8 +15,8 @@
  *                 improveBar(start) first try, the last of them on a later day than the first. Blocks are disjoint and
  *                 judged only when complete, and only the first IMPROVE_MAX_BLOCKS can complete the run, so practising
  *                 longer adds no chances: a low start partly rises again by chance (regression to the mean). In a
- *                 simulation of children who do not improve, it fired for at most about 4 % of them (the sliding
- *                 window used before: up to 80 %; docs/research.md §7.2). Once per skill-Stufe.
+ *                 simulation of children who do not improve, it fired on one Stufe for at most about 4 % of them (the
+ *                 sliding window used before: up to 80 %; docs/research.md §7.2). Once per skill-Stufe.
  *   5. behalten – a task type the child once got wrong (the skill-Stufe, or the Einmaleins fact) solved first try in
  *                 a spaced review (the scheduler picks those items) ≥ LASTING_MIN_DAYS after the last miss.
  *
@@ -46,7 +46,7 @@ export const HARD_START_MAX = 6;
 export const HARD_START_MIN_WRONG = 3;
 /** "Besser geworden": each block of 10 later-day answers has at least this many more first try than the start … */
 export const IMPROVE_MIN_GAIN = 4;
-/** … and at least this many (the 'Sicher' level) … */
+/** … and at least this many (as many as 'Sicher' needs among the last 10) … */
 export const IMPROVE_MIN_RECENT = 8;
 /** … in this many blocks in a row … */
 export const IMPROVE_RUN = 3;

@@ -298,6 +298,12 @@ describe('kind 4: skill improved (a hard start, then three good blocks of 10 on 
     expect(firedAt(outs)).toBe(45);
     // 10 wrong on D1, then 10 on day 1 and 20 on day 2: the run spans day 1 and day 2
     expect(firedAt(play([...start(0), ...block(10, day(1)), ...pattern('x'.repeat(20), day(2))]).outs)).toBe(40);
+    // 5 on day 1 and 25 on day 2: the first block spans both days and closes on day 2, so the run needs day 3
+    const spans = play([...start(4), ...pattern('x'.repeat(5), day(1)), ...pattern('x'.repeat(25), day(2))]);
+    expect(besserOf(spans.outs)).toEqual([]);
+    expect(spans.s.get().growth.stufen['zahlen.runden#1']).toMatchObject({ later: 30, run: 3, runDay: day(2) });
+    const more = play(pattern('x'.repeat(10), day(3)), spans.s).outs;
+    expect(firedAt([...spans.outs, ...more])).toBe(50);
   });
 
   it('only the first 8 blocks after the start can complete the run (more practice adds no chances)', () => {
@@ -314,6 +320,9 @@ describe('kind 4: skill improved (a hard start, then three good blocks of 10 on 
     const missedReviews = (d: string) => [ev({ day: d, purpose: 'review', firstTry: false }), ev({ day: d, purpose: 'review', firstTry: false })];
     const { outs } = play([...start(4), ...[1, 2, 3].flatMap((d) => [...missedReviews(day(d)), ...block(8, day(d))])]);
     expect(firedAt(outs)).toBe(46);
+    // also in the middle of a block
+    const mid = play([...start(4), ...[1, 2, 3].flatMap((d) => [...block(8, day(d)).slice(0, 5), ...missedReviews(day(d)), ...block(8, day(d)).slice(5)])]);
+    expect(firedAt(mid.outs)).toBe(46);
     const mixed = [1, 2, 3].flatMap((d) => [...block(8, day(d)).slice(0, 9), ev({ day: day(d), purpose: d === 2 ? 'twin' : 'mixed' })]);
     expect(besserOf(play([...start(4), ...mixed]).outs)).toHaveLength(1);
   });
@@ -647,6 +656,33 @@ describe('random play keeps the tracking valid, bounded and loadable', () => {
       }
       expect(new Set(earned).size).toBe(earned.length);
     }
+  });
+});
+
+describe('random play of a child who improves: every "besser" shows true numbers', () => {
+  it('with mixed, twin, review and Blitz answers in between, "jetzt X von 10" is the last 10 and above the bar', async () => {
+    const { createRng } = await import('../core/rng');
+    const purposes = ['practice', 'practice', 'mixed', 'twin', 'review', 'blitz'] as const;
+    let seen = 0;
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const rng = createRng(seed);
+      const s = createStore(null);
+      let day = '2026-10-01';
+      for (let i = 0; i < 400; i++) {
+        if (rng.chance(0.08)) day = addDays(day, rng.int(1, 4));
+        const firstTry = rng.chance(i < 15 ? 0.4 : 0.95);
+        const usedHint = !firstTry && rng.chance(0.3);
+        const out = s.recordAnswer(ev({ stufe: rng.pick([1, 2] as const), purpose: rng.pick(purposes), day, firstTry, usedHint, wrongAttempt: !firstTry && !usedHint }));
+        for (const e of out.growth) {
+          if (e.kind !== 'besser') continue;
+          seen += 1;
+          expect(e.recent).toBeGreaterThanOrEqual(improveBar(e.early));
+          expect(s.get().skills[`${e.skillId}#${e.stufe}`].recent.slice(-10).filter(Boolean)).toHaveLength(e.recent);
+        }
+      }
+    }
+    // the checks above must not go silently dead
+    expect(seen).toBeGreaterThan(0);
   });
 });
 

@@ -204,8 +204,9 @@ function HowItWorks() {
       <p>
         Die wichtigsten Abzeichen gibt es nicht fürs Richtigmachen beim ersten Mal, sondern dafür, dass etwas, das am Anfang
         schwerfiel, später gelingt: an einem anderen Tag oder in der Wiederholung nach ein paar Tagen. Verglichen wird nur mit dem
-        eigenen früheren Stand. Kleine Fortschritte in einer Runde bekommen nur einen kurzen Satz. Absichtlich etwas Verkehrtes
-        einzugeben, lohnt sich dabei nicht. Unter „Mein Fortschritt“ zeigt „So hast du dich verbessert“, was besser geworden ist. Dafür werden
+        eigenen früheren Stand. Kleine Fortschritte in einer Runde bekommen nur einen kurzen Satz. Mit absichtlich verkehrten
+        Antworten allein lässt sich kein Abzeichen verdienen: Jedes braucht echte Erfolge an späteren Tagen oder in einer
+        Wiederholung. Unter „Mein Fortschritt“ zeigt „So hast du dich verbessert“, was besser geworden ist. Dafür werden
         nur Zahlen, Fehlerarten und Tage gespeichert, wie alles andere nur auf diesem Gerät und erst nach „Ja, merken“.
       </p>
 
