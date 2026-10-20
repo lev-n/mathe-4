@@ -1,4 +1,4 @@
-/* Ziffernblock: keys ≥ 64 px, gaps ≥ 8 px, sits beside or below the task (never over it). */
+/* Ziffernblock: Material tonal keys ≥ 64 px, gaps ≥ 8 px, sits beside or below the task (never over it). */
 .keypad {
   width: 100%;
   max-width: 20rem;
@@ -12,6 +12,9 @@
 }
 
 .keypad__key {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -19,49 +22,67 @@
   min-height: var(--tap-lg);
   min-width: var(--tap-lg);
   padding: var(--space-1);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-m);
-  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-l);
+  background: var(--surface-high);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--fs-digit);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background var(--motion-ms), transform var(--motion-ms);
+  transition: background var(--motion-ms), border-radius var(--motion-ms), transform var(--motion-ms);
+}
+.keypad__key::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--motion-ms);
+  pointer-events: none;
 }
 @media (hover: hover) and (pointer: fine) {
-  .keypad__key:hover { background: var(--surface-2); }
+  .keypad__key:hover:not(:disabled)::after { opacity: var(--state-hover); }
 }
-.keypad__key:active { transform: translateY(1px); background: var(--primary-soft); }
+.keypad__key:focus-visible::after { opacity: var(--state-focus); }
+/* Pressed: the key rounds off a little more (Material expressive shape change) and darkens. */
+.keypad__key:active { border-radius: var(--radius-xl); }
+.keypad__key:active::after { opacity: var(--state-pressed); }
 .keypad__key:disabled { opacity: 0.45; cursor: not-allowed; }
 
+.keypad__key--back,
+.keypad__key--comma { background: var(--secondary-soft); color: var(--on-secondary-soft); }
 .keypad__key--back { font-size: var(--fs-lead); }
 .keypad__sub {
   font-family: var(--font-ui);
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   margin-top: 2px;
 }
 
 .keypad__submit {
   grid-column: 1 / -1;
   width: 100%;
+  border-radius: var(--radius-l);
 }
 .keypad__submit--with-hint { grid-column: span 2; }
 .keypad__hint {
   min-height: var(--tap-lg);
   padding-inline: var(--space-2);
   gap: var(--space-1);
+  border-radius: var(--radius-l);
   font-size: var(--fs-body);
   line-height: 1.15;
 }
 .keypad__hint svg { flex: none; color: var(--primary); }
-.keypad__hint[aria-disabled='true'] { opacity: 0.6; cursor: default; font-size: var(--fs-small); }
+.keypad__hint[aria-disabled='true'] { font-size: var(--fs-small); }
+.keypad__hint[aria-disabled='true'] svg { color: inherit; }
 
 /*
  * Phones (the keypad sits below the task): 4 columns × 4 rows instead of 3 × 5, so the task, the answer

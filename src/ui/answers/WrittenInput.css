@@ -15,14 +15,14 @@
 /* Überschlag (asked for first on Stufe 2–3) */
 .wi-ueb { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); max-width: 100%; }
 .wi-ueb__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2) var(--space-3); font-size: var(--fs-lead); }
-.wi-ueb__label { font-weight: 700; }
-.wi-ueb__approx { font-weight: 700; color: var(--text-muted); }
+.wi-ueb__label { font-weight: var(--fw-medium); }
+.wi-ueb__approx { font-weight: var(--fw-medium); color: var(--text-muted); }
 .wi-ueb__input { width: 9ch; max-width: 100%; font-variant-numeric: tabular-nums; }
 .wi-ueb__input.wi-revealed { border-color: var(--primary); background: var(--primary-soft); }
 .wi-ueb__help,
 .wi-ueb__note { margin: 0; max-width: 36rem; font-size: var(--fs-small); text-align: center; }
 .wi-ueb__help { color: var(--text-muted); }
-.wi-ueb__note { font-weight: 650; color: var(--text); }
+.wi-ueb__note { font-weight: var(--fw-medium); color: var(--text); }
 .wi-print-ueb { margin: 0 0 2mm; align-self: flex-start; font-size: 12pt; }
 .wi-print-ueb__line { display: inline-block; width: 35mm; border-bottom: 1pt solid var(--ink); vertical-align: baseline; }
 
@@ -44,11 +44,11 @@
 }
 
 .wi-digit { color: var(--text); }
-.wi-sign { font-weight: 700; color: var(--text); }
+.wi-sign { font-weight: var(--fw-strong); color: var(--text); }
 
 /* Stellentafel-Kopf: E Z H T … */
 .wi-head .wi-cell { height: auto; padding-bottom: var(--space-1); }
-.wi-headcell { font-family: var(--font-ui); font-size: var(--fs-small); font-weight: 650; color: var(--text-muted); }
+.wi-headcell { font-family: var(--font-ui); font-size: var(--fs-small); font-weight: var(--fw-medium); color: var(--text-muted); }
 .wi-headcell abbr { text-decoration: none; }
 
 /* lines: under the task (mul) and above the result */
@@ -77,8 +77,8 @@
   min-height: var(--tap);
   padding: 0;
   border: 2px dashed var(--border);
-  border-radius: 6px;
-  background: var(--surface-2);
+  border-radius: var(--radius-xs);
+  background: var(--surface-low);
   font-family: var(--font-mono);
   font-size: 1.1rem;
   text-align: center;

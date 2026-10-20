@@ -1,4 +1,4 @@
-/* Base element styles and shared primitives used by all components. */
+/* Base element styles and shared Material primitives (buttons, text fields, cards) used by all components. */
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -9,11 +9,12 @@ body {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
   line-height: var(--lh);
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { line-height: 1.2; margin: 0 0 var(--space-3); }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 var(--space-3); font-weight: var(--fw-medium); letter-spacing: 0; }
 h1 { font-size: var(--fs-h1); }
 h2 { font-size: var(--fs-h2); }
 h3 { font-size: var(--fs-lead); }
@@ -39,46 +40,73 @@ svg text { font-family: var(--font-ui); }
   white-space: nowrap; border: 0;
 }
 
-/* ── Buttons ───────────────────────────────────────── */
+/* ── Buttons (Material common buttons: outlined by default, filled, tonal, text) ── */
 .btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
   min-height: var(--tap); min-width: var(--tap);
   padding: var(--space-2) var(--space-5);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
   background: var(--surface);
-  color: var(--text);
-  font-weight: 650;
+  color: var(--primary);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.01em;
   text-decoration: none;
   cursor: pointer;
-  transition: background var(--motion-ms), border-color var(--motion-ms), transform var(--motion-ms);
+  transition: background var(--motion-ms), border-color var(--motion-ms), box-shadow var(--motion-ms), color var(--motion-ms);
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.btn:active { transform: translateY(1px); }
-.btn:disabled, .btn[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
-.btn--primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+/* State layer: a tint of the label colour over the container (hover 8 %, focus 10 %, pressed 12 %). */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--motion-ms);
+  pointer-events: none;
+}
+.btn:focus-visible::after { opacity: var(--state-focus); }
+.btn:active::after { opacity: var(--state-pressed); }
+.btn:disabled, .btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  color: color-mix(in srgb, var(--text) 38%, transparent);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn:disabled::after, .btn[aria-disabled='true']::after { display: none; }
+.btn--primary { background: var(--primary); border-color: transparent; color: var(--on-primary); }
+.btn--tonal { background: var(--secondary-soft); border-color: transparent; color: var(--on-secondary-soft); }
 .btn--ghost { border-color: transparent; background: transparent; }
 /* Hover tints only for real pointers: on touch screens :hover sticks to the last tapped button,
    which then looks greyed out or disabled. */
 @media (hover: hover) and (pointer: fine) {
-  .btn:hover { background: var(--surface-2); }
-  .btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: var(--on-primary); }
-  .btn--ghost:hover { background: var(--surface-2); }
+  .btn:hover:not(:disabled):not([aria-disabled='true'])::after { opacity: var(--state-hover); }
+  .btn--primary:hover:not(:disabled):not([aria-disabled='true']) { box-shadow: var(--shadow-1); }
 }
 .btn--lg { min-height: var(--tap-lg); min-width: var(--tap-lg); font-size: var(--fs-lead); padding: var(--space-3) var(--space-6); }
 
-/* ── Inputs ────────────────────────────────────────── */
+/* ── Text fields (Material outlined) ──────────────── */
 .num-input {
   min-height: var(--tap-lg);
   width: 9ch;
   padding: var(--space-2) var(--space-3);
-  border: 3px solid var(--border);
-  border-radius: var(--radius-s);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-xs);
   background: var(--surface);
   font-family: var(--font-mono);
   font-size: var(--fs-digit);
   text-align: right;
   font-variant-numeric: tabular-nums;
+  caret-color: var(--primary);
+  transition: border-color var(--motion-ms);
 }
 .num-input:focus-visible { border-color: var(--focus); }
 .num-input.is-wrong { border-color: var(--retry); background: var(--retry-soft); }
@@ -89,7 +117,7 @@ svg text { font-family: var(--font-ui); }
   width: 2.6rem; height: 3.2rem;
   min-width: var(--tap); min-height: var(--tap);
   border: 2px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--surface);
   font-family: var(--font-mono);
   font-size: var(--fs-digit);
@@ -101,10 +129,11 @@ svg text { font-family: var(--font-ui); }
 .digit-box.is-right { border-color: var(--ok); background: var(--ok-soft); }
 
 /* ── Layout helpers ────────────────────────────────── */
+/* Elevated card: white container on the tinted surface, elevation level 1. */
 .card {
   background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-l);
+  border: none;
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-1);
   padding: var(--space-5);
 }
@@ -132,8 +161,8 @@ svg text { font-family: var(--font-ui); }
       background:
         linear-gradient(to right, var(--surface) 40%, transparent) left / 1.5rem 100% no-repeat local,
         linear-gradient(to left, var(--surface) 40%, transparent) right / 1.5rem 100% no-repeat local,
-        radial-gradient(farthest-side at 0 50%, rgb(28 35 51 / 22%), transparent) left / 0.6rem 100% no-repeat scroll,
-        radial-gradient(farthest-side at 100% 50%, rgb(28 35 51 / 22%), transparent) right / 0.6rem 100% no-repeat scroll,
+        radial-gradient(farthest-side at 0 50%, rgb(31 31 31 / 22%), transparent) left / 0.6rem 100% no-repeat scroll,
+        radial-gradient(farthest-side at 100% 50%, rgb(31 31 31 / 22%), transparent) right / 0.6rem 100% no-repeat scroll,
         var(--surface);
       /* the picture sits on its own white panel, also inside tinted feedback boxes */
       border-radius: var(--radius-m);

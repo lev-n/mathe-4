@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
-const token = (name: string): string => {
-  const m = css.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`));
+/** Resolves a token to its hex value, following aliases such as `--text: var(--md-on-surface)`. */
+const token = (name: string, depth = 0): string => {
+  const m = css.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6}|var\\(--[a-z0-9-]+\\))`));
   if (!m) throw new Error(`token --${name} not found`);
-  return m[1];
+  if (m[1].startsWith('#')) return m[1];
+  if (depth > 5) throw new Error(`token --${name}: alias chain too deep`);
+  return token(m[1].slice(6, -1), depth + 1);
 };
 const lum = (hex: string) => {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));

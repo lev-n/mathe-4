@@ -14,7 +14,7 @@
 
 .ws-intro { display: flex; flex-direction: column; gap: var(--space-3); }
 .ws-seed { display: flex; flex-direction: column; gap: var(--space-2); }
-.ws-seed label { font-weight: 700; }
+.ws-seed label { font-weight: var(--fw-medium); }
 .ws-seed__input { width: min(100%, 14ch); text-align: left; font-size: var(--fs-lead); }
 
 .ws-actions {
@@ -29,7 +29,6 @@
 /* ── Sheet (screen) ────────────────────────────────── */
 .worksheet {
   background: var(--surface);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-1);
   padding: var(--space-6) var(--space-5);
@@ -46,7 +45,7 @@
   margin: 0 0 var(--space-1);
   font-size: var(--fs-small);
   color: var(--text-muted);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
 }
 .worksheet__meta { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: var(--fs-small); max-width: none; }
 .worksheet__fields {
@@ -55,7 +54,7 @@
   gap: var(--space-3) var(--space-6);
   align-items: flex-end;
 }
-.worksheet__fields > span { display: inline-flex; align-items: flex-end; gap: var(--space-2); font-weight: 700; }
+.worksheet__fields > span { display: inline-flex; align-items: flex-end; gap: var(--space-2); font-weight: var(--fw-medium); }
 .write-line {
   display: inline-block;
   width: 14rem;
@@ -77,8 +76,8 @@
   break-inside: avoid;
   page-break-inside: avoid;
 }
-.ws-task::marker { font-weight: 800; }
-.ws-task__prompt { font-weight: 650; margin-bottom: var(--space-2); }
+.ws-task::marker { font-weight: var(--fw-strong); }
+.ws-task__prompt { font-weight: var(--fw-medium); margin-bottom: var(--space-2); }
 .ws-task__context { margin-bottom: var(--space-2); }
 .ws-task__expr {
   font-family: var(--font-mono);
@@ -118,7 +117,7 @@
 .answer-key__info { color: var(--text-muted); font-size: var(--fs-small); max-width: none; }
 .answer-key__list { margin: 0; padding-left: 2rem; display: flex; flex-direction: column; gap: var(--space-3); }
 .key-item { break-inside: avoid; }
-.key-item__answer { font-weight: 750; display: block; }
+.key-item__answer { font-weight: var(--fw-strong); display: block; }
 .key-item__step { display: block; color: var(--text-muted); font-size: var(--fs-small); }
 
 /* ── Print: A4, black/white, nothing but the sheet ─── */

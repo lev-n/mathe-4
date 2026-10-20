@@ -1,4 +1,4 @@
-/* App shell: layout, header, navigation, footer and shared page primitives. Colours only from tokens.css. */
+/* App shell: top app bar, navigation, footer and shared page primitives. Colours only from tokens.css. */
 
 .app {
   min-height: 100vh;
@@ -15,27 +15,29 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--tap);
-  padding: var(--space-2) var(--space-4);
-  background: var(--surface);
-  color: var(--primary);
-  border: 2px solid var(--primary);
-  border-radius: var(--radius-m);
-  font-weight: 700;
+  padding: var(--space-2) var(--space-5);
+  background: var(--primary);
+  color: var(--on-primary);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-2);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
   transform: translateY(-200%);
 }
 .skip-link:focus,
 .skip-link:focus-visible {
   transform: none;
+  color: var(--on-primary);
 }
 
-/* ── Header ────────────────────────────────────────── */
+/* ── Top app bar ───────────────────────────────────── */
 .site-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
 }
 .site-header__inner {
   max-width: 960px;
   margin: 0 auto;
+  min-height: 64px;
   padding: var(--space-2) var(--space-4);
   display: flex;
   flex-wrap: wrap;
@@ -50,12 +52,12 @@
   gap: var(--space-3);
   min-height: var(--tap);
   padding-right: var(--space-2);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-full);
   color: var(--text);
   text-decoration: none;
-  font-weight: 800;
+  font-weight: var(--fw-medium);
   font-size: 1.5rem;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   /* Brand lettering: one typeface (the plain-zero digit font is for maths content). */
   font-family: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
 }
@@ -64,6 +66,7 @@
 .logo-mark__bg { fill: var(--primary); }
 .logo-mark__fg { stroke: var(--on-primary); }
 
+/* Navigation: Material navigation items (label + icon, pill-shaped active indicator). */
 .site-nav ul {
   list-style: none;
   margin: 0;
@@ -73,27 +76,44 @@
   gap: var(--gap-tap);
 }
 .site-nav a {
-  display: flex;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2);
   min-height: var(--tap);
   padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-m);
-  color: var(--text);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
   font-size: var(--fs-small);
-  font-weight: 650;
+  font-weight: var(--fw-medium);
   text-decoration: none;
   text-align: center;
   line-height: 1.2;
+  transition: background var(--motion-ms), color var(--motion-ms);
 }
-.site-nav a:hover { background: var(--surface-2); color: var(--text); }
-/* Current page: background + underline bar + bold (not colour alone) */
+.site-nav a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--motion-ms);
+}
+.site-nav a:hover { color: var(--text); }
+.site-nav a:hover::after { opacity: var(--state-hover); }
+.site-nav a:focus-visible::after { opacity: var(--state-focus); }
+.site-nav__icon { width: 24px; height: 24px; flex: none; }
+/* Current page: tonal indicator + filled icon + stronger weight (not colour alone) */
 .site-nav a[aria-current='page'] {
-  background: var(--primary-soft);
-  color: var(--primary-hover);
-  box-shadow: inset 0 -3px 0 var(--primary);
-  font-weight: 750;
+  background: var(--secondary-soft);
+  color: var(--on-secondary-soft);
+  font-weight: var(--fw-strong);
 }
+.site-nav a[aria-current='page'] .site-nav__icon { fill: currentColor; fill-opacity: 0.25; }
 
 @media (max-width: 44rem) {
   .site-nav { width: 100%; }
@@ -101,10 +121,10 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
-  .site-nav a { padding: var(--space-2); }
+  .site-nav a { padding: var(--space-2); flex-direction: column; gap: 2px; border-radius: var(--radius-l); }
 }
 
-.app--minimal .site-header__inner { padding-block: var(--space-1); }
+.app--minimal .site-header__inner { padding-block: var(--space-1); min-height: var(--tap); }
 
 /* ── Main ──────────────────────────────────────────── */
 .site-main {
@@ -120,8 +140,7 @@ h1[tabindex='-1']:focus { outline: none; }
 
 /* ── Footer ────────────────────────────────────────── */
 .site-footer {
-  background: var(--surface);
-  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-low);
 }
 .site-footer__inner {
   max-width: 960px;
@@ -152,15 +171,17 @@ h1[tabindex='-1']:focus { outline: none; }
   min-height: var(--tap);
   min-width: var(--tap);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-full);
   font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
 }
-.site-footer__links a[aria-current='page'] { font-weight: 750; }
+.site-footer__links a[aria-current='page'] { font-weight: var(--fw-strong); text-decoration: none; background: var(--secondary-soft); color: var(--on-secondary-soft); }
 
 /* ── Shared primitives ─────────────────────────────── */
-/* Link-buttons keep their text colour on hover (base.css colours plain links on hover) */
-a.btn:hover { color: var(--text); }
+/* Link-buttons keep their label colour on hover (base.css colours plain links on hover) */
+a.btn:hover { color: var(--primary); }
 a.btn--primary:hover { color: var(--on-primary); }
+a.btn--tonal:hover { color: var(--on-secondary-soft); }
 
 .loading {
   color: var(--text-muted);
@@ -192,7 +213,7 @@ a.btn--primary:hover { color: var(--on-primary); }
 }
 .star-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
 
-/* Topic accents: soft colour, used for borders/icons, never as text colour on white */
+/* Topic accents: soft colour, used for icon containers and progress, never as text colour on white */
 .topic--zahlen { --accent: var(--topic-zahlen); --accent-bg: var(--topic-zahlen-bg); }
 .topic--schriftlich { --accent: var(--topic-schriftlich); --accent-bg: var(--topic-schriftlich-bg); }
 .topic--kopfrechnen { --accent: var(--topic-kopfrechnen); --accent-bg: var(--topic-kopfrechnen-bg); }
