@@ -1,32 +1,75 @@
 /*
- * Design tokens. Contrast (docs/research.md, Accessibility baseline):
- * task text ≥ 7:1, other text ≥ 4.5:1, borders/focus/progress ≥ 3:1. Verified in src/styles/contrast.test.ts.
+ * Design tokens: Material Design 3 colour roles, shape scale, elevation and state layers.
+ * The app keeps its accessible, calm defaults (docs/research.md): task text ≥ 7:1, other text ≥ 4.5:1,
+ * borders/focus/progress ≥ 3:1 (verified in src/styles/contrast.test.ts), no alarm red, no sound.
+ * Components use the short aliases (--bg, --surface, --primary …); the --md-* roles name the Material source.
  */
 :root {
   color-scheme: light;
 
-  --bg: #f7f6f1;
-  --surface: #ffffff;
-  --surface-2: #f0efe9;
-  --text: #1c2333;
-  --text-muted: #4b5567;
-  --border: #767f90;
-  --border-subtle: #d9dce3;
+  /* ── Material colour roles (light scheme, blue seed) ── */
+  --md-primary: #0b57d0;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #d3e3fd;
+  --md-on-primary-container: #041e49;
+  --md-primary-dim: #0842a0;
 
-  --primary: #2450b8;
-  --primary-hover: #1c4096;
-  --primary-soft: #e6edfb;
-  --on-primary: #ffffff;
+  --md-secondary: #00639b;
+  --md-secondary-container: #c2e7ff;
+  --md-on-secondary-container: #001d35;
 
-  --focus: #1a3a9c;
+  /* tertiary carries "noch nicht" feedback: calm amber, never alarm red */
+  --md-tertiary: #7a4b00;
+  --md-tertiary-container: #ffdea8;
+  --md-on-tertiary-container: #281900;
+
+  --md-success: #146c2e;
+  --md-success-container: #c4eed0;
+  --md-on-success-container: #072711;
+
+  --md-surface: #f7f9fc;
+  --md-surface-container-lowest: #ffffff;
+  --md-surface-container-low: #f0f4f9;
+  --md-surface-container: #e9eef6;
+  --md-surface-container-high: #e3e8f0;
+  --md-surface-container-highest: #dde3ea;
+  --md-on-surface: #1f1f1f;
+  --md-on-surface-variant: #444746;
+  --md-outline: #747775;
+  --md-outline-variant: #c4c7c5;
+
+  /* ── Aliases used by the components ── */
+  --bg: var(--md-surface);
+  --surface: var(--md-surface-container-lowest);
+  --surface-2: var(--md-surface-container);
+  --surface-low: var(--md-surface-container-low);
+  --surface-high: var(--md-surface-container-high);
+  --surface-highest: var(--md-surface-container-highest);
+  --text: var(--md-on-surface);
+  --text-muted: var(--md-on-surface-variant);
+  --border: var(--md-outline);
+  --border-subtle: var(--md-outline-variant);
+
+  --primary: var(--md-primary);
+  --primary-hover: var(--md-primary-dim);
+  --primary-soft: var(--md-primary-container);
+  --on-primary: var(--md-on-primary);
+  --on-primary-soft: var(--md-on-primary-container);
+
+  --secondary-soft: var(--md-secondary-container);
+  --on-secondary-soft: var(--md-on-secondary-container);
+
+  --focus: var(--md-primary);
 
   /* Feedback: correct = green, "noch nicht" = calm amber (never alarm red) */
-  --ok: #17704a;
-  --ok-soft: #e3f3ea;
-  --retry: #7a4b00;
-  --retry-soft: #fff1d6;
+  --ok: var(--md-success);
+  --ok-soft: var(--md-success-container);
+  --retry: var(--md-tertiary);
+  --retry-soft: var(--md-tertiary-container);
+  --on-ok-soft: var(--md-on-success-container);
+  --on-retry-soft: var(--md-on-tertiary-container);
 
-  /* Topic accents (≥ 3:1 on white) and soft backgrounds */
+  /* Topic accents (≥ 3:1 on white) and their tonal containers */
   --topic-zahlen: #2e62c9;        --topic-zahlen-bg: #e8effc;
   --topic-schriftlich: #6b45c2;   --topic-schriftlich-bg: #efe9fb;
   --topic-kopfrechnen: #a84b14;   --topic-kopfrechnen-bg: #fcede3;
@@ -44,7 +87,7 @@
   --c-orange: #e9852d;
 
   /* Visual drawing */
-  --ink: #1c2333;
+  --ink: #1f1f1f;
   --grid-line: #848c9c;
   --fill-1: #9cc0f5;
   --fill-2: #f7c59f;
@@ -54,6 +97,7 @@
   --font-mono: 'Mathe Ziffern', 'Atkinson Hyperlegible Mono Variable', 'Atkinson Hyperlegible Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --font-school: 'Andika', var(--font-ui);
 
+  /* Type scale (sizes follow the readability targets in docs/research.md P11; weights follow Material: 400 body, 500 labels and titles) */
   --fs-small: 1.05rem;
   --fs-body: 1.25rem;
   --fs-lead: 1.45rem;
@@ -61,6 +105,9 @@
   --fs-h1: 2.1rem;
   --fs-task: 2.25rem;
   --fs-digit: 2rem;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-strong: 600;
 
   --lh: 1.5;
   --measure: 60ch;
@@ -73,19 +120,31 @@
   --space-6: 2rem;
   --space-7: 3rem;
 
+  /* Material shape scale */
+  --radius-xs: 4px;
   --radius-s: 8px;
-  --radius-m: 14px;
-  --radius-l: 22px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+  --radius-xl: 28px;
+  --radius-full: 999px;
 
   --tap: 48px;
   --tap-lg: 64px;
   --gap-tap: 8px;
 
-  --shadow-1: 0 1px 2px rgb(28 35 51 / 8%), 0 2px 8px rgb(28 35 51 / 6%);
-  --shadow-2: 0 2px 4px rgb(28 35 51 / 10%), 0 8px 24px rgb(28 35 51 / 8%);
+  /* Material elevation levels */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 1px 3px 1px rgb(0 0 0 / 15%);
+  --shadow-2: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 6px 2px rgb(0 0 0 / 15%);
+  --shadow-3: 0 1px 3px rgb(0 0 0 / 30%), 0 4px 8px 3px rgb(0 0 0 / 15%);
+
+  /* State layer opacities */
+  --state-hover: 0.08;
+  --state-focus: 0.1;
+  --state-pressed: 0.12;
 
   --motion-ms: 200ms;
   --celebrate-ms: 700ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

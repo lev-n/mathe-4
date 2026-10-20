@@ -28,7 +28,7 @@
   gap: var(--cells-gap);
   padding: var(--cells-gap);
   background: var(--grid-line);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .cells-cell {
@@ -129,7 +129,7 @@
 .cells-summary {
   margin: 0;
   color: var(--retry);
-  font-weight: 650;
+  font-weight: var(--fw-medium);
   text-align: center;
 }
 

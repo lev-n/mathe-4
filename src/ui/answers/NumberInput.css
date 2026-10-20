@@ -2,7 +2,7 @@
 .ans-label {
   display: block;
   font-size: var(--fs-small);
-  font-weight: 650;
+  font-weight: var(--fw-medium);
   color: var(--text-muted);
   margin-bottom: var(--space-2);
 }
@@ -27,7 +27,7 @@
   align-items: center;
   gap: var(--space-1);
   font-size: var(--fs-small);
-  font-weight: 650;
+  font-weight: var(--fw-medium);
 }
 .field-mark svg { flex: none; }
 .field-mark--wrong { color: var(--retry); }
@@ -39,7 +39,8 @@
   min-height: var(--tap-lg);
   justify-content: flex-start;
   text-align: left;
-  font-weight: 600;
+  font-weight: var(--fw-medium);
+  color: var(--text);
 }
 .ans-unsolvable__box {
   display: inline-flex;
@@ -49,15 +50,15 @@
   width: 1.6rem;
   height: 1.6rem;
   border: 2px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--surface);
-  font-weight: 800;
+  font-weight: var(--fw-strong);
   line-height: 1;
 }
 .ans-unsolvable.is-pressed {
   border-color: var(--primary);
-  border-width: 3px;
   background: var(--primary-soft);
+  color: var(--on-primary-soft);
 }
 .ans-unsolvable.is-pressed .ans-unsolvable__box { border-color: var(--primary); color: var(--primary); }
 .ans-number__unsolvable { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
@@ -82,7 +83,7 @@
   min-width: 5.5rem;
   height: 2.6rem;
   border: 2px solid var(--ink);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   vertical-align: middle;
 }
 .print-box--sm { min-width: 3.5rem; }

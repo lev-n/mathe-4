@@ -195,3 +195,56 @@ export function InfoIcon() {
     </svg>
   );
 }
+
+/** Navigation icons (top app bar): outlined, 24 px; the current page tints the inside (app.css). */
+const NAV_ICON_PROPS = {
+  className: 'site-nav__icon',
+  viewBox: '0 0 24 24',
+  width: 24,
+  height: 24,
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+  focusable: false,
+};
+
+export function HomeIcon() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M4 10.5 12 4l8 6.5V20h-5.5v-6h-5v6H4z" />
+    </svg>
+  );
+}
+
+export function ProgressIcon() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M4 20V4" />
+      <path d="M4 20h16" />
+      <path d="M8 16v-5h3v5zM13 16V7h3v9z" />
+    </svg>
+  );
+}
+
+export function SheetIcon() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4M9 12h6M9 16h6" />
+    </svg>
+  );
+}
+
+export function AdultsIcon() {
+  return (
+    <svg {...NAV_ICON_PROPS}>
+      <circle cx="9" cy="8" r="3.5" />
+      <circle cx="17" cy="9.5" r="2.5" />
+      <path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20z" />
+      <path d="M16 15.5h1.5a3.5 3.5 0 0 1 3.5 3.5v1h-4" />
+    </svg>
+  );
+}

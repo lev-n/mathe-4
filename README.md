@@ -6,6 +6,7 @@ An interactive math practice portal for 4th-grade students (Klasse 4, Grundschul
 
 - **Live:** https://mathe-4.web.app (Firebase project `mathe-4`)
 - **Stack:** Vite + React + TypeScript (strict), Vitest; no runtime dependencies besides React and self-hosted fonts.
+- **Design:** Material Design 3 (tonal colour roles, shape scale, elevation and state layers in `src/styles/tokens.css`), with the readability rules below kept intact: large type, 48/64 px targets and contrast-tested tokens.
 
 ---
 

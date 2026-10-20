@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
-import { LogoMark } from './icons';
+import type { ComponentType } from 'react';
+import { AdultsIcon, HomeIcon, LogoMark, ProgressIcon, SheetIcon } from './icons';
 import { Link, NavLink } from './router';
 import { PATHS } from './routes';
 
-const NAV = [
-  { to: PATHS.home, label: 'Start' },
-  { to: PATHS.progress, label: 'Mein Fortschritt' },
-  { to: PATHS.worksheet, label: 'Arbeitsblätter' },
-  { to: PATHS.adults, label: 'Für Erwachsene' },
-] as const;
+const NAV: ReadonlyArray<{ to: string; label: string; Icon: ComponentType }> = [
+  { to: PATHS.home, label: 'Start', Icon: HomeIcon },
+  { to: PATHS.progress, label: 'Mein Fortschritt', Icon: ProgressIcon },
+  { to: PATHS.worksheet, label: 'Arbeitsblätter', Icon: SheetIcon },
+  { to: PATHS.adults, label: 'Für Erwachsene', Icon: AdultsIcon },
+];
 
 export const MAIN_ID = 'main';
 
@@ -50,7 +51,10 @@ export function Layout({ children, minimal = false }: { children: ReactNode; min
               <ul>
                 {NAV.map((item) => (
                   <li key={item.to}>
-                    <NavLink to={item.to}>{item.label}</NavLink>
+                    <NavLink to={item.to}>
+                      <item.Icon />
+                      <span>{item.label}</span>
+                    </NavLink>
                   </li>
                 ))}
               </ul>
