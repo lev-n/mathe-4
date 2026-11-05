@@ -96,22 +96,37 @@ function keypadBelow(): boolean {
   }
 }
 
+/**
+ * How much of the screen the Ziffernblock covers on phones, where it stays at the bottom while the task scrolls behind it
+ * (practice.css, .keypad-sticks). 0 where it scrolls with the page: wide and very low screens, or once the item is finished.
+ */
+function keypadCover(within: Element): number {
+  const keypad = within.closest('.pr-item-layout')?.querySelector<HTMLElement>('.pr-keypad');
+  if (!keypad || !keypadBelow()) return 0;
+  return getComputedStyle(keypad).position === 'sticky' ? keypad.getBoundingClientRect().height : 0;
+}
+
 type Span = { top: number; bottom: number };
 
 /** Top edge of the task: Zwilling/Knobel label, Sachaufgabe context or prompt (whichever comes first). */
 const TASK_START = '.pr-twin-label, .pr-knobel-label, .pr-context, .pr-prompt';
+/** Top edge of what the child must read to answer; a Zwilling/Knobel label above it gives way when space is short. */
+const QUESTION_START = '.pr-context, .pr-prompt';
 
 /**
  * Scroll as little as possible to show the field plus, in order of priority, as much as fits:
  * - a new task ('new'): the task text from its top, then the whole Ziffernblock (phones), then the buttons;
  * - after a wrong answer ('retry'): the hint (feedback panel), then the Ziffernblock, then the task text.
- * The field itself is never cut off.
+ * The field itself is never cut off, and never behind a Ziffernblock that stays on screen (which then needs no room of its own).
+ * The one exception: above such a Ziffernblock, a hint and its field may not fit together. The hint comes first, and typing
+ * brings the field back (keepAboveKeypad).
  */
 export function revealField(field: HTMLElement, mode: 'new' | 'retry' = 'new'): void {
   if (typeof window === 'undefined') return;
-  const view = window.innerHeight;
+  const cover = keypadCover(field);
+  const view = window.innerHeight - cover;
   const box = field.getBoundingClientRect();
-  if (!view || (box.width === 0 && box.height === 0)) return;
+  if (!window.innerHeight || (box.width === 0 && box.height === 0)) return;
   const item = field.closest<HTMLElement>('.pr-item');
   const layout = field.closest<HTMLElement>('.pr-item-layout');
   const span = (sel: string, root: HTMLElement | null): Span | null => {
@@ -121,13 +136,18 @@ export function revealField(field: HTMLElement, mode: 'new' | 'retry' = 'new'): 
   const join = (a: Span, b: Span): Span => ({ top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) });
   const fits = (s: Span) => s.bottom - s.top <= view - 2 * MARGIN;
 
-  const keypad = layout?.classList.contains('has-keypad') && keypadBelow() ? span('.pr-keypad', layout) : null;
+  const keypad = !cover && layout?.classList.contains('has-keypad') && keypadBelow() ? span('.pr-keypad', layout) : null;
   const task = span(TASK_START, item);
   const feedback = span('.pr-invalid, .pr-feedback', item);
   const actions = span('.pr-actions', item);
-  const extras = mode === 'retry' ? [feedback, keypad, task, actions] : [task, keypad, feedback, actions];
+  const question = span(QUESTION_START, item);
+  const extras = mode === 'retry' ? [feedback, keypad, task, actions] : [question, keypad, task, feedback, actions];
 
   let show: Span = { top: box.top, bottom: box.bottom };
+  if (cover && mode === 'retry' && feedback && !fits(join(show, feedback))) {
+    scrollToShow(feedback, view);
+    return;
+  }
   let keypadShown = false;
   for (const extra of extras) {
     if (!extra) continue;
@@ -163,7 +183,16 @@ export function showRegion(top: Element, bottom: Element = top): void {
   const a = top.getBoundingClientRect();
   const b = bottom.getBoundingClientRect();
   if (a.width === 0 && a.height === 0) return;
-  scrollToShow({ top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) }, window.innerHeight);
+  scrollToShow({ top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) }, window.innerHeight - keypadCover(top));
+}
+
+/** Focus moved to another field (digit by digit in a written calculation): bring it out from behind the Ziffernblock. */
+export function keepAboveKeypad(field: HTMLElement): void {
+  if (typeof window === 'undefined' || !window.innerHeight) return;
+  const cover = keypadCover(field);
+  if (!cover) return;
+  const { top, bottom } = field.getBoundingClientRect();
+  scrollToShow({ top, bottom }, window.innerHeight - cover);
 }
 
 /** Scroll sideways-scrolling containers (written columns, grids, number lines) so the field is inside them. */

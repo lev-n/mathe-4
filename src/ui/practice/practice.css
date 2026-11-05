@@ -100,6 +100,23 @@
   .pr-item-layout.has-keypad { grid-template-columns: minmax(0, 1fr) 17rem; }
   .pr-item-layout.has-keypad .pr-keypad { position: sticky; top: var(--space-4); }
 }
+/*
+ * Phones: while the child answers, the Ziffernblock stays at the bottom of the screen and a tall task scrolls behind it, so
+ * the keys never leave the screen (fieldNav.ts keeps the field above it). Not on very low screens such as a phone held
+ * sideways, where it would cover most of the view. Flex column: a sticky grid item could not leave its own row.
+ */
+@media (max-width: 899px) and (min-height: 520px) {
+  .pr-item-layout.keypad-sticks { display: flex; flex-direction: column; align-items: stretch; }
+  .pr-item-layout.keypad-sticks > * { min-width: 0; }
+  .pr-item-layout.keypad-sticks .pr-keypad {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding-block: var(--space-2);
+    background: var(--bg);
+    box-shadow: 0 -6px 8px -6px rgb(0 0 0 / 0.25);
+  }
+}
 
 .pr-item { display: flex; flex-direction: column; gap: var(--space-4); }
 .pr-item:focus { outline: none; }

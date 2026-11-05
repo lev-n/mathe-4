@@ -14,6 +14,7 @@ import {
   firstWrongField,
   initialField,
   previousField,
+  keepAboveKeypad,
   revealField,
   showRegion,
 } from './fieldNav';
@@ -435,6 +436,70 @@ describe('revealField / showRegion (simulated layout)', () => {
     revealField(els.f, 'new');
     expect(scroll).toHaveBeenCalledWith(0, 292);
     vi.unstubAllGlobals();
+  });
+
+  describe('Ziffernblock fixed at the bottom of a phone screen', () => {
+    const sticky = (view: number, rects: Record<string, [number, number]>) => {
+      itemDom();
+      document.querySelector<HTMLElement>('.pr-keypad')!.style.position = 'sticky';
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(max-width: 899px)', addEventListener() {}, removeEventListener() {} }));
+      return layout(view, rects);
+    };
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('a new field never ends up behind it: the task and the field fit into the rest of the screen', () => {
+      const { scroll, els } = sticky(667, { 'pr-prompt': [300, 340], f: [420, 470], 'pr-keypad': [387, 667] });
+      revealField(els.f, 'new');
+      expect(scroll).toHaveBeenCalledWith(0, 470 - (387 - 8));
+    });
+
+    it('a tall task: the field wins and the task text starts at the top when both do not fit', () => {
+      const { scroll, els } = sticky(667, { 'pr-prompt': [-200, -100], f: [500, 560], 'pr-keypad': [387, 667] });
+      revealField(els.f, 'new');
+      expect(scroll).toHaveBeenCalledWith(0, 560 - (387 - 8));
+    });
+
+    it('a field already above it stays put', () => {
+      const { scroll, els } = sticky(667, { 'pr-prompt': [100, 140], f: [200, 260], 'pr-keypad': [387, 667] });
+      revealField(els.f, 'new');
+      expect(scroll).not.toHaveBeenCalled();
+    });
+
+    it('after a wrong answer the hint is shown above it', () => {
+      const { scroll, els } = sticky(667, { 'pr-prompt': [-100, -60], f: [100, 160], 'pr-feedback': [170, 420], 'pr-keypad': [387, 667] });
+      revealField(els.f, 'retry');
+      expect(scroll).toHaveBeenCalledWith(0, 420 - (387 - 8));
+    });
+
+    it('after a wrong answer, when hint and field do not fit together, the hint comes first (typing brings the field back)', () => {
+      const { scroll, els } = sticky(640, { f: [263, 314], 'pr-feedback': [668, 880], 'pr-keypad': [382, 640] });
+      revealField(els.f, 'retry');
+      expect(scroll).toHaveBeenCalledWith(0, 880 - (382 - 8));
+    });
+
+    it('showRegion keeps a new hint above it', () => {
+      const { scroll, els } = sticky(667, { 'pr-feedback': [300, 450], 'pr-keypad': [387, 667] });
+      showRegion(els['pr-feedback']);
+      expect(scroll).toHaveBeenCalledWith(0, 450 - (387 - 8));
+    });
+
+    it('focus moving to a cell behind it scrolls that cell up, and to a cell above the screen scrolls down', () => {
+      const under = sticky(667, { f: [500, 556], 'pr-keypad': [387, 667] });
+      keepAboveKeypad(under.els.f);
+      expect(under.scroll).toHaveBeenCalledWith(0, 556 - (387 - 8));
+      vi.restoreAllMocks();
+      const above = sticky(667, { f: [-60, -4], 'pr-keypad': [387, 667] });
+      keepAboveKeypad(above.els.f);
+      expect(above.scroll).toHaveBeenCalledWith(0, -60 - 8);
+    });
+
+    it('does nothing where the Ziffernblock is not fixed (it scrolls with the page)', () => {
+      itemDom();
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(max-width: 899px)', addEventListener() {}, removeEventListener() {} }));
+      const { scroll, els } = layout(375, { f: [500, 556], 'pr-keypad': [600, 880] });
+      keepAboveKeypad(els.f);
+      expect(scroll).not.toHaveBeenCalled();
+    });
   });
 
   it('after a wrong answer: the hint below the field wins over the task text', () => {

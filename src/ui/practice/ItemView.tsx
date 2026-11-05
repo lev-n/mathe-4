@@ -3,10 +3,10 @@
  * feedback panels of the attempt state machine (see session.ts).
  */
 import { useRef, type KeyboardEvent, type MouseEvent, type Ref } from 'react';
-import { isEmptyResponse } from '../../core/check';
+import { isEmptyResponse, isUntouchedResponse } from '../../core/check';
 import type { Answer, CheckResult, Exercise, Response } from '../../core/types';
 import AnswerInput from '../answers/AnswerInput';
-import { advanceOrSubmit } from '../answers/fieldNav';
+import { advanceOrSubmit, keepAboveKeypad } from '../answers/fieldNav';
 import Keypad from '../keypad/Keypad';
 import VisualView from '../visuals/Visual';
 import {
@@ -173,7 +173,15 @@ export default function ItemView(props: ItemViewProps) {
   );
 
   return (
-    <div className={`pr-item-layout${showKeypad ? ' has-keypad' : ''}`}>
+    <div
+      className={`pr-item-layout${showKeypad ? ' has-keypad' : ''}${showKeypad && !finished && !exampleOpen ? ' keypad-sticks' : ''}`}
+      onFocus={(e) => {
+        if (e.target.matches('[data-answer-field]')) keepAboveKeypad(e.target);
+      }}
+      onInput={(e) => {
+        if (e.target instanceof HTMLElement && e.target.matches('[data-answer-field]')) keepAboveKeypad(e.target);
+      }}
+    >
       <section
         className="pr-item card"
         ref={sectionRef}
@@ -326,7 +334,7 @@ export default function ItemView(props: ItemViewProps) {
           <Keypad
             scopeRef={answerRef}
             onSubmit={(field) => advanceOrSubmit(answerRef.current, field, submit)}
-            submitDisabled={empty || finished}
+            submitDisabled={isUntouchedResponse(response) || finished}
             comma={wantsComma(ex)}
             disabled={finished || exampleOpen}
             hint={{
