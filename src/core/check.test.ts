@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { UEBERSCHLAG_MISSING, checkAnswer, correctResponse, formatAnswer, isEmptyResponse, responseForBug } from './check';
-import type { Answer, Bug } from './types';
+import { UEBERSCHLAG_MISSING, checkAnswer, correctResponse, formatAnswer, isEmptyResponse, responseForBug, isUntouchedResponse } from './check';
+import type { Answer, Bug, Response } from './types';
 
 describe('checkAnswer: number', () => {
   const answer: Answer = { kind: 'number', value: 345700 };
@@ -219,5 +219,21 @@ describe('checkAnswer: bug ids (error-library tags for the improvement tracking)
     expect(checkAnswer(answer, { kind: 'number', text: '85' }, [{ id: 'x', match: 85, hint: 'h' }]).bugId).toBeUndefined();
     const choice: Answer = { kind: 'choice', options: [{ label: 'a' }, { label: 'b', whyWrong: 'w' }], correct: 0 };
     expect(checkAnswer(choice, { kind: 'choice', index: 1 }).bugId).toBeUndefined();
+  });
+});
+
+describe('isUntouchedResponse', () => {
+  it('an Überschlag alone is not checkable, but the Ziffernblock can move on from it', () => {
+    const r: Response = { kind: 'written', result: '', ueberschlag: '14000' };
+    expect(isEmptyResponse(r)).toBe(true);
+    expect(isUntouchedResponse(r)).toBe(false);
+  });
+
+  it('nothing typed is still untouched; a result is neither', () => {
+    expect(isUntouchedResponse({ kind: 'written', result: '', ueberschlag: '  ' })).toBe(true);
+    expect(isUntouchedResponse({ kind: 'written', result: '' })).toBe(true);
+    expect(isUntouchedResponse(null)).toBe(true);
+    expect(isUntouchedResponse({ kind: 'written', result: '42' })).toBe(false);
+    expect(isUntouchedResponse({ kind: 'number', text: '' })).toBe(true);
   });
 });

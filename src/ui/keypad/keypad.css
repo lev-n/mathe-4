@@ -1,4 +1,4 @@
-/* Ziffernblock: Material tonal keys ≥ 64 px, gaps ≥ 8 px, sits beside or below the task (never over it). */
+/* Ziffernblock: Material tonal keys ≥ 64 px, gaps ≥ 8 px, sits beside the task or stays at the bottom of a phone screen (practice.css). */
 .keypad {
   width: 100%;
   max-width: 20rem;
@@ -85,9 +85,8 @@
 .keypad__hint[aria-disabled='true'] svg { color: inherit; }
 
 /*
- * Phones (the keypad sits below the task): 4 columns × 4 rows instead of 3 × 5, so the task, the answer
- * field and the whole keypad fit on the screen together. Keys stay ≥ 64 px; 0 is wide like on a
- * calculator's number block.
+ * Phones (the keypad sits below the task): 4 columns × 4 rows instead of 3 × 5, so more of the task fits
+ * above it. Keys stay ≥ 64 px wide; 0 is wide like on a calculator's number block.
  *   7 8 9 ⌫
  *   4 5 6 ,
  *   1 2 3 Tipp
@@ -117,6 +116,13 @@
   .keypad--with-hint .keypad__hint { grid-area: hint; flex-direction: column; gap: 0; padding: var(--space-1); font-size: var(--fs-small); }
   .keypad--with-hint .keypad__hint[aria-disabled='true'] { font-size: 0.85rem; }
   .keypad--with-hint .keypad__submit { grid-area: submit; }
+}
+
+/* Short phones: keys 52 px high (still 64 px wide), so the task keeps more than half of the screen. */
+@media (max-width: 899px) and (max-height: 740px) {
+  .keypad__key,
+  .keypad__hint,
+  .keypad__submit { min-height: 52px; }
 }
 
 @media print {

@@ -285,7 +285,13 @@ export default function Round({ plan, skills, shared, onExit, onNavigate, onAgai
     if (el) {
       if (target === 'item') {
         if (!focusAnswer(el, 'item')) focusItem(el);
-      } else if (target === 'retry' || target === 'invalid') focusAnswer(el, target);
+      } else if (target === 'retry' || target === 'invalid') {
+        if (!focusAnswer(el, target)) {
+          // no empty field to go to: the focus stays, but the message must be seen (not behind the Ziffernblock)
+          const message = el.querySelector('.pr-invalid');
+          if (message) showRegion(message);
+        }
+      }
       else if (target === 'next') {
         // Weiter gets focus, but the page shows the feedback from its top (a worked solution is read from
         // its beginning, not opened scrolled to its end next to Weiter).

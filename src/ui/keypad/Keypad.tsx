@@ -4,7 +4,7 @@
  * inserted with native input events so the answer components' React onChange fires as usual.
  */
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
-import { answerFields, initialField } from '../answers/fieldNav';
+import { answerFields, initialField, keepAboveKeypad } from '../answers/fieldNav';
 import { backspace, insertChar, isTypeableInput } from './insert';
 import './keypad.css';
 
@@ -66,6 +66,7 @@ export default function Keypad({ scopeRef, onSubmit, submitDisabled, comma, disa
     if (document.activeElement !== target) target.focus({ preventScroll: true });
     lastFocused.current = target;
     fn(target);
+    keepAboveKeypad(target); // also when the value stays the same, e.g. the same digit over a selected wrong answer
   };
 
   const keepFocus = (e: ReactPointerEvent | ReactMouseEvent) => e.preventDefault();

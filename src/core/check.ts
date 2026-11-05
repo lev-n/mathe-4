@@ -285,6 +285,14 @@ export function formatAnswer(answer: Answer): string {
 }
 
 /** true if the child has not entered anything yet (Prüfen stays disabled). */
+/**
+ * Nothing typed at all. An Überschlag without a result cannot be checked yet (isEmptyResponse), but the Ziffernblock's
+ * "Prüfen" must work there: like Enter, it first moves on to the next empty field, and it is the only way to do so on a phone.
+ */
+export function isUntouchedResponse(response: Response | null): boolean {
+  return isEmptyResponse(response) && !(response?.kind === 'written' && (response.ueberschlag ?? '').trim() !== '');
+}
+
 export function isEmptyResponse(response: Response | null): boolean {
   if (!response) return true;
   switch (response.kind) {
